@@ -1,0 +1,77 @@
+{
+  "date": "2026-11-09",
+  "mode": "redesign",
+  "depth": "restyle",
+  "scope": "app",
+  "genre": "playful",
+  "theme": "brand",
+  "shape": "app screen",
+  "axes": "lilac canvas / heavy Korean sans / violet field, lime action and coral signals",
+  "hero": "not applicable, working app",
+  "nav": "bold learning shell",
+  "footer": "course note",
+  "imagery": "real mathematical diagrams, no photo slots",
+  "photos": [],
+  "entry": "src/main.js",
+  "fingerprint": "existing setup and learning layout / bold outlined surfaces / short answer and stage celebrations",
+  "sections": [
+    "learning setup",
+    "five-stage course",
+    "math question and visual",
+    "thinking guide",
+    "stage result"
+  ],
+  "signature": "Colorful real math quizzes with a short correct-answer burst",
+  "waived": [],
+  "prompt": "자바스크립트와 css를 사용해서 화려하고 톡톡튀게 10대들이 좋아하는 분위기로 디자인해",
+  "material": "working math app, achievement standards, real question content, calculated session results",
+  "files": {
+    "edit": [
+      "src/tokens.css",
+      "src/style.css",
+      "src/main.js",
+      "README.md"
+    ],
+    "create": [
+      "src/learning-effects.js"
+    ],
+    "delete": []
+  },
+  "review": {
+    "method": "fresh finish-review subagent",
+    "verdict": "fix",
+    "findings": 1,
+    "resolved": 1,
+    "resolution": "Mobile setup actions use normal document flow; all achievement criteria remain visible. Confirmed in the same375px recapture."
+  },
+  "checks": {
+    "floor": 0,
+    "reflex": 0,
+    "warn": 3,
+    "screenshots": 25,
+    "unitTests": 31,
+    "build": "pass",
+    "links": "2/2",
+    "fields": "11/11",
+    "headings": "8/8",
+    "domFlow": "setup, grading, hints, five-stage completion, replay, cancellation, custom settings",
+    "effects": "cleanup after completion/reset, preference changes, hidden tabs; reduced motion skips animations"
+  },
+  "answeredWarnings": [
+    {
+      "gate": 40,
+      "selector": ".audience-badge",
+      "reason": "Static merge uses an earlier muted foreground; final selector sets dark ink on coral. Actual token contrast7.92:1."
+    },
+    {
+      "gate": 40,
+      "selector": ".difficulty-badge",
+      "reason": "Static merge uses an earlier violet foreground; final selector sets dark ink on coral. Actual token contrast7.92:1."
+    },
+    {
+      "gate": 40,
+      "selector": "progress",
+      "reason": "Non-text graphical indicator at4.36:1 exceeds3:1."
+    }
+  ]
+}

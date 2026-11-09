@@ -11,5 +11,8 @@
   },
   "devDependencies": {
     "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "katex": "^0.19.1"
   }
 }

@@ -1,15 +1,16 @@
 export const MODEL = 'gpt-6-luna'
 const RESPONSES_URL = 'https://api.openai.com/v1/responses'
 
-export function createRequestBody(input) {
+export function createRequestBody(input, { instructions, format, maxOutputTokens = 4096 } = {}) {
   return {
     model: MODEL,
-    instructions: 'You are Pop Chat, a friendly and helpful assistant. Reply in Korean unless the user requests another language. Be clear, concise, and encouraging. Use plain text with readable line breaks.',
+    instructions: instructions ?? String.raw`You are a patient Korean math learning guide for first-year vocational high school students. Explain one concept at a time and ask a guiding question. Never give the final answer or the correct option to a quiz. Format numbers and mathematical expressions in LaTeX using \( ... \) or \[ ... \].`,
     input,
     // 이 모델이 지원하는 none으로 추론을 끄고 간단한 텍스트 대화를 실습합니다.
     reasoning: { effort: 'none' },
-    max_output_tokens: 4096,
+    max_output_tokens: maxOutputTokens,
     store: false,
+    ...(format ? { text: { format } } : {}),
   }
 }
 
@@ -53,7 +54,7 @@ export function parseResponse(data) {
   return { text, messages }
 }
 
-export async function requestResponse({ apiKey, input, signal, timeoutMs = 60000 }) {
+export async function requestResponse({ apiKey, input, signal, timeoutMs = 60000, instructions, format, maxOutputTokens }) {
   const controller = new AbortController()
   let timedOut = false
   const abort = () => controller.abort()
@@ -65,7 +66,7 @@ export async function requestResponse({ apiKey, input, signal, timeoutMs = 60000
     const response = await fetch(RESPONSES_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(createRequestBody(input)),
+      body: JSON.stringify(createRequestBody(input, { instructions, format, maxOutputTokens })),
       signal: controller.signal,
     })
     let data

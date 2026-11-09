@@ -1,0 +1,55 @@
+{
+  "scope": "app",
+  "mode": "redesign",
+  "depth": "full",
+  "files": {
+    "edit": [
+      "src/main.js",
+      "src/style.css",
+      "src/visuals.js",
+      "index.html"
+    ],
+    "create": [
+      "src/tokens.css",
+      "src/base.css",
+      "src/guide-layout.js"
+    ],
+    "delete": []
+  },
+  "material": {
+    "real": [
+      "퀴즈팝",
+      "특성화고 1학년 수학",
+      "성취기준",
+      "실제 계산한 학습 결과",
+      "문항의 조건과 수식"
+    ],
+    "pictures": "사진 없이 실제 문제와 수학 시각 자료를 사용",
+    "absent": [
+      "사용자 수 지표",
+      "후기",
+      "추가 로고",
+      "사진 슬롯"
+    ]
+  },
+  "baseline": "이 대화에서 승인된 진행 중 작업을 유지하고 before-source에 UI 대상 파일의 원본을 보관함.",
+  "review": {
+    "source": "Hallmark finish-review subagent",
+    "findings": [
+      "설정 후 시작 버튼으로 돌아가기",
+      "모바일에서 문제 곁의 길잡이 접근",
+      "완료 화면의 비활성 입력",
+      "단계 결과와 전체 결과 구분",
+      "모바일 헤더 단어 줄바꿈"
+    ],
+    "resolution": "5개 모두 해결. 설정 뒤의 고정 시작 동작, 모바일 인라인 길잡이, 완료 안내와 비활성 입력 숨김, 단계별 점수 제목, 의미 단위의 헤더 줄바꿈을 재촬영에서 확인함."
+  },
+  "checks": {
+    "unitTests": 31,
+    "build": "pass",
+    "domFlow": "setup, grading, hints, five-stage completion, replay, cancellation, custom settings",
+    "mobileFlow": "disclosure, chat handler preservation, resize, completed state",
+    "rendered": "25 screenshots, 0 FAIL, 0 REFLEX, 0 WARN",
+    "preserved": "2/2 links, 11/11 fields; all 42 existing template IDs retained"
+  }
+}

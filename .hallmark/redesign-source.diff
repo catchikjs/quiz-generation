@@ -1,0 +1,871 @@
+--- before/src/main.js
++++ after/src/main.js
+@@ -8,6 +8,7 @@
+ import { renderMessage } from './render-message.js'
+ import { renderVisual } from './visuals.js'
+ import { createQuestionHistory } from './question-history.js'
++import { createGuideLayout } from './guide-layout.js'
+ 
+ const apiKey = (import.meta.env.VITE_OPENAI_API_KEY ?? '').trim()
+ let historyStorage
+@@ -41,62 +42,70 @@
+ 
+ $('#app').innerHTML = `
+   <header class="site-header">
+-    <a href="./" class="wordmark" aria-label="퀴즈팝 처음 화면"><span class="logo-mark" aria-hidden="true">✳</span>퀴즈<span>팝</span><i>.</i></a>
++    <a href="./" class="wordmark" aria-label="퀴즈팝 처음 화면"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" class="logo-surface"/><path d="M16 7v18M7 16h18M9.6 9.6l12.8 12.8M9.6 22.4 22.4 9.6" class="logo-strokes"/></svg>퀴즈팝</a>
+     <span class="header-description">한 문제씩, 나의 속도로.</span>
+-    <div class="header-actions"><span class="audience-badge">특성화고 · 1학년 수학</span><button class="icon-button" id="help-button" type="button" aria-label="사용 방법">?</button></div>
++    <div class="header-actions"><span class="audience-badge">특성화고 <span>1학년 수학</span></span><button class="icon-button" id="help-button" type="button">사용 방법</button></div>
+   </header>
++  <div class="page-intro">
++    <div class="journey-heading"><h1 id="journey-title">오늘의 수학 퀴즈</h1><p id="journey-description">배울 단원과 성취기준을 고르고, 나의 속도로 풀어 보세요.</p></div>
++    <span class="session-chip" id="session-chip" role="status">학습 준비</span>
++  </div>
+   <main class="app-layout">
+     <aside class="settings-panel">
+       <details id="settings-details" open>
+-        <summary><span class="section-icon">⚙</span><span>나의 학습 설정<small>오늘은 무엇을 배워 볼까요?</small></span><span class="details-chevron">⌄</span></summary>
++        <summary><span class="settings-summary-title">학습 설정</span><span id="settings-summary-info">단원과 성취기준을 선택해요.</span><span class="details-chevron" aria-hidden="true">⌄</span></summary>
+         <form id="settings-form">
++
++          <p id="setup-error" class="inline-error" role="alert" hidden></p>
+           <fieldset id="settings-fields">
+-            <label class="field-label" for="course">과목</label>
+-            <select id="course" name="course"><option>공통수학1</option><option>공통수학2</option></select>
+-            <label class="field-label" for="unit">단원</label><select id="unit" name="unit"></select>
+-            <label id="custom-unit-label" class="field-label" for="custom-unit" hidden>단원명 직접 입력</label><input id="custom-unit" maxlength="100" placeholder="예: 이차함수의 최댓값과 최솟값" hidden>
+-            <label class="field-label" for="range">학습 범위 <span>선택</span></label><textarea id="range" rows="2" maxlength="700" placeholder="예: 교과서 20~35쪽, 다항식의 덧셈과 곱셈"></textarea>
+-            <div class="label-row"><span class="field-label">성취기준</span><span class="tiny-label">여러 개 선택 가능</span></div>
+-            <div id="standards" class="standards-list" role="group" aria-label="성취기준 선택"></div>
+-            <p class="source-note">선택 문구는 원문의 요약입니다. <a id="standards-source" target="_blank" rel="noopener noreferrer">교육청 자료 ↗</a></p>
+-            <label class="field-label" for="custom-standards">성취기준 직접 입력 <span>선택</span></label><textarea id="custom-standards" rows="2" maxlength="1500" placeholder="학교에서 사용하는 기준을 한 줄에 하나씩 입력하세요."></textarea>
+-            <div class="field-divider"></div>
+-            <label class="field-label" for="difficulty">시작 난이도</label><select id="difficulty"></select>
+-            <label class="field-label" for="question-count">단계당 문항 수</label><select id="question-count"><option value="3">3문항 · 가볍게 시작</option><option value="5">5문항 · 충분히 연습</option><option value="7">7문항 · 꼼꼼히 확인</option></select>
++            <section class="settings-content" aria-labelledby="content-heading">
++              <h2 id="content-heading">무엇을 배울까요?</h2>
++              <div class="field-pair"><div><label class="field-label" for="course">과목</label><select id="course" name="course"><option>공통수학1</option><option>공통수학2</option></select></div><div><label class="field-label" for="unit">단원</label><select id="unit" name="unit"></select></div></div>
++              <label id="custom-unit-label" class="field-label" for="custom-unit" hidden>단원명 직접 입력</label><input id="custom-unit" autocomplete="off" maxlength="100" placeholder="예: 이차함수의 최댓값과 최솟값" hidden>
++              <div class="label-row"><span class="field-label">성취기준</span><span class="tiny-label">여러 개 선택 가능</span></div>
++              <div id="standards" class="standards-list" role="group" aria-label="성취기준 선택"></div>
++              <p class="source-note">선택 문구는 원문의 요약입니다. <a id="standards-source" target="_blank" rel="noopener noreferrer">교육청 자료</a></p>
++            </section>
++            <section class="settings-method" aria-labelledby="method-heading">
++              <h2 id="method-heading">어떻게 시작할까요?</h2>
++              <label class="field-label" for="difficulty">시작 난이도</label><select id="difficulty" ></select>
++              <label class="field-label" for="question-count">단계당 문항 수</label><select id="question-count" ><option value="3">3문항</option><option value="5">5문항</option><option value="7">7문항</option></select>
++              <p class="method-note">한 단계의 문제를 모두 풀면 다음 난이도로 이어져요.</p>
++            </section>
++            <details class="additional-settings"><summary>학습 범위와 성취기준 직접 입력</summary><div class="additional-fields"><div><label class="field-label" for="range">학습 범위 <span>선택</span></label><textarea id="range" rows="2" maxlength="700" placeholder="예: 교과서 20~35쪽, 다항식의 덧셈과 곱셈"></textarea></div><div><label class="field-label" for="custom-standards">성취기준 직접 입력 <span>선택</span></label><textarea id="custom-standards" rows="2" maxlength="1500" placeholder="학교에서 사용하는 기준을 한 줄에 하나씩 입력하세요."></textarea></div></div></details>
+           </fieldset>
+-          <p id="setup-error" class="inline-error" role="alert" hidden></p>
+-          <button class="primary-button start-button" id="start-button" type="submit">나의 퀴즈 만들기 <span aria-hidden="true">↗</span></button>
+-          <button class="secondary-button reset-settings" id="reset-button" type="button" hidden>설정 바꾸고 새로 시작</button>
+-          <button class="text-button demo-button" id="demo-button" type="button">먼저 예시 퀴즈 체험하기 →</button>
++          <div class="setup-actions"><button class="primary-button start-button" id="start-button" type="submit">퀴즈 만들기</button><button class="secondary-button reset-settings" id="reset-button" type="button" hidden>설정 바꾸고 새로 시작</button><button class="text-button demo-button" id="demo-button" type="button">예시 퀴즈 체험</button></div>
++
++
+           <p class="setup-footnote" id="setup-footnote">선택한 단계부터 최상위까지 차근차근 이어져요.</p>
+         </form>
+       </details>
+-      <div class="settings-bottom"><span class="connection-dot" id="connection-dot"></span><span id="connection-label"></span><span class="model-label"></span></div>
++      <div class="settings-bottom"><span id="connection-dot" hidden></span><span id="connection-label" role="status"></span></div>
+     </aside>
+     <section class="learning-column" aria-label="퀴즈 학습">
+-      <div class="learning-topline"><span class="eyebrow">MY MATH JOURNEY</span><span class="session-chip" id="session-chip">오늘의 작은 도전</span></div>
+-      <div class="journey-heading"><h1 id="journey-title">한 단계씩, 수학 자신감.</h1><p id="journey-description">정답을 찾는 것보다, 알아가는 과정이 중요하니까.</p></div>
++      <h2 class="course-heading">나의 학습 단계</h2>
+       <ol class="stage-track" id="stage-track" aria-label="난이도 학습 단계"></ol>
+       <div id="session-progress" class="session-progress" hidden><div><span id="progress-label"></span><strong id="progress-value"></strong></div><progress id="total-progress" max="100" value="0" aria-label="전체 학습 진행률"></progress></div>
+       <div id="quiz-workspace" aria-live="polite"></div>
+       <p class="learning-footnote">틀려도 괜찮아요. 힌트와 질문으로 다시 생각하면, 그것도 배움이에요.</p>
+     </section>
+     <aside class="guide-panel" aria-labelledby="guide-heading">
+-      <div class="guide-top"><div class="guide-avatar" aria-hidden="true">✦</div><div><h2 id="guide-heading">생각 길잡이</h2><p>답 대신, 다음 한 걸음.</p></div><span class="guide-status-dot" aria-hidden="true"></span></div>
+-      <div class="guide-context" id="guide-context">퀴즈를 시작하면 함께할게요</div>
++      <div class="guide-top"><h2 id="guide-heading">생각 길잡이</h2><p>답 대신, 다음 한 걸음.</p></div>
++      <div class="guide-context" id="guide-context">퀴즈를 시작하면 함께할게요.</div>
+       <div class="guide-log" id="guide-log" role="log" aria-live="polite" aria-label="생각 길잡이 대화"></div>
+       <div class="guide-prompts" id="guide-prompts"></div>
+       <p class="inline-error guide-error" id="guide-error" role="alert" hidden></p>
+-      <form id="guide-form"><label class="sr-only" for="guide-input">모르는 부분 질문하기</label><div class="guide-composer"><textarea id="guide-input" rows="2" maxlength="1200" placeholder="어떤 부분이 헷갈리나요?" disabled></textarea><button id="guide-send" type="submit" aria-label="질문 보내기" disabled>↑</button></div></form>
++      <form id="guide-form"><label class="field-label" for="guide-input">모르는 부분 질문하기</label><div class="guide-composer"><textarea id="guide-input" rows="3" maxlength="1200" placeholder="어떤 부분이 헷갈리나요?" disabled></textarea><button id="guide-send" type="submit" disabled>질문 보내기</button></div></form>
+       <p class="guide-note">정답·보기 번호를 알려주지 않아요.<br>개념을 함께 짚으며 스스로 풀도록 도와요.</p>
+     </aside>
+   </main>
+-  <footer class="site-footer"><span>SMALL STEPS. BIG POSSIBILITIES. ✳</span><p>AI 문항은 오류가 있을 수 있어요. 수업 활용 전 확인해 주세요. <button id="local-help" type="button">로컬 실습 안내</button></p></footer>
+-  <dialog id="help-dialog" aria-labelledby="help-title"><button class="close-dialog" id="close-help" type="button" aria-label="안내 닫기">×</button><span class="eyebrow">LET’S GET STARTED</span><h2 id="help-title">작은 도전, 큰 성장.</h2><ol><li>단원 또는 범위와 성취기준을 선택해요.</li><li>시작 난이도와 문항 수를 정하고 퀴즈를 만들어요.</li><li>보기의 번호나 내용을 누르면 바로 채점돼요. 키보드 숫자 1~5도 사용할 수 있어요.</li><li>오답이면 힌트를 보고 다른 답을 골라요. 모르는 것은 생각 길잡이에게 물어보세요.</li><li>한 단계의 모든 문제를 맞히면 결과를 확인하고 다음 단계로 올라가요.</li></ol><div class="local-help"><strong>로컬 API 설정</strong><p>프로젝트의 <code>.env.local</code>에 <code>VITE_OPENAI_API_KEY=본인의키</code> 형식으로 설정하세요. 키가 없다면 예시 퀴즈를 먼저 체험할 수 있어요.</p><p>실제 키는 브라우저와 빌드 파일에 노출됩니다. 키가 포함된 빌드를 공개 배포하지 마세요. 새로고침하면 현재 진행만 초기화되고, 최근 출제 이력은 이 브라우저에 유지돼요.</p></div></dialog>
++  <footer class="site-footer"><span>퀴즈팝</span><p>AI 문항은 오류가 있을 수 있어요. 수업 활용 전 확인해 주세요. <button id="local-help" type="button">로컬 실습 안내</button></p></footer>
++  <dialog id="help-dialog" aria-labelledby="help-title"><button class="close-dialog" id="close-help" type="button" aria-label="안내 닫기">×</button><h2 id="help-title">퀴즈팝 사용 방법</h2><ol><li>단원 또는 범위와 성취기준을 선택해요.</li><li>시작 난이도와 문항 수를 정하고 퀴즈를 만들어요.</li><li>보기의 번호나 내용을 누르면 바로 채점돼요. 키보드 숫자 1~5도 사용할 수 있어요.</li><li>오답이면 힌트를 보고 다른 답을 골라요. 모르는 것은 생각 길잡이에게 물어보세요.</li><li>한 단계의 모든 문제를 맞히면 결과를 확인하고 다음 단계로 올라가요.</li></ol><div class="local-help"><h3>로컬 API 설정</h3><p>프로젝트의 <code>.env.local</code>에 <code>VITE_OPENAI_API_KEY=본인의키</code> 형식으로 설정하세요. 키가 없다면 예시 퀴즈를 먼저 체험할 수 있어요.</p><p>실제 키는 브라우저와 빌드 파일에 노출됩니다. 키가 포함된 빌드를 공개 배포하지 마세요. 새로고침하면 현재 진행만 초기화되고, 최근 출제 이력은 이 브라우저에 유지돼요.</p><p>출제 모델: <span class="model-label"></span></p></div></dialog>
+ `
+ 
++const guideLayout = createGuideLayout()
+ $('.model-label').textContent = MODEL
+-STAGES.forEach((stage, i) => $('#difficulty').append(new Option(`${i + 1}. ${stage.name} · ${stage.subtitle}`, i)))
++STAGES.forEach((stage, i) => $('#difficulty').append(new Option(`${stage.name} (${stage.subtitle})`, i)))
+ 
+ function populateUnits() {
+   $('#unit').replaceChildren()
+@@ -122,6 +131,7 @@
+   const custom = !unit
+   $('#custom-unit').hidden = !custom
+   $('#custom-unit-label').hidden = !custom
++  if (custom) $('.additional-settings').open = true
+   $('#standards').hidden = custom
+   $('#custom-standards').placeholder = custom ? '성취기준이나 학습목표를 반드시 입력해 주세요.' : '추가할 성취기준을 한 줄에 하나씩 입력하세요.'
+   $('#standards-source').href = $('#course').value === '공통수학1' ? SOURCES.common1 : SOURCES.common2
+@@ -139,6 +149,7 @@
+ function setupLock() {
+   const active = Boolean(session)
+   $('#settings-fields').disabled = active
++  $('#settings-summary-info').textContent = active ? `${session.settings.course} / ${session.settings.unit || '직접 입력한 범위'} / ${session.settings.count}문항씩` : '단원과 성취기준을 선택해요.'
+   $('#start-button').hidden = active
+   $('#reset-button').hidden = !active
+   $('#demo-button').hidden = active
+@@ -181,7 +192,7 @@
+   showingSummary = false
+   $('#setup-error').hidden = true
+   setupLock()
+-  if (window.matchMedia?.('(max-width: 760px)').matches) $('#settings-details').open = false
++  $('#settings-details').open = false
+   void loadStage(settings.startStage)
+ }
+ async function loadStage(stage) {
+@@ -240,9 +251,9 @@
+     $('#stage-track').append(item)
+   })
+   $('#session-progress').hidden = !session
+-  $('#session-chip').textContent = session ? session.mode === 'demo' ? '예시 체험 · 다항식' : `${session.settings.course} · 맞춤 퀴즈` : '오늘의 작은 도전'
+-  $('#journey-title').textContent = session ? session.settings.unit || '나만의 학습 범위' : '한 단계씩, 수학 자신감.'
+-  $('#journey-description').textContent = session ? `${session.settings.standards.length}개 성취기준 · 단계당 ${session.settings.count}문항 · ${STAGES[session.settings.startStage].name}부터 최상위까지` : '정답을 찾는 것보다, 알아가는 과정이 중요하니까.'
++  $('#session-chip').textContent = session ? session.mode === 'demo' ? '다항식 예시 체험' : `${session.settings.course} 맞춤 퀴즈` : '학습 준비'
++  $('#journey-title').textContent = session ? session.settings.unit || '직접 입력한 학습 범위' : '오늘의 수학 퀴즈'
++  $('#journey-description').textContent = session ? `성취기준 ${session.settings.standards.length}개, 단계마다 ${session.settings.count}문항. ${STAGES[session.settings.startStage].name}부터 최상위까지 풀어 보세요.` : '배울 단원과 성취기준을 고르고, 나의 속도로 풀어 보세요.'
+   if (!session) return
+   const done = session.history.reduce((sum, s) => sum + s.solved, 0) + summarize(session.progress).solved
+   const total = (STAGES.length - session.settings.startStage) * session.settings.count
+@@ -252,10 +263,12 @@
+ }
+ function renderWelcome() {
+   const welcome = node('div', 'welcome-card')
+-  welcome.innerHTML = `<div class="welcome-art" aria-hidden="true"><span class="art-orbit orbit-one">✦</span><span class="art-orbit orbit-two">✳</span><div class="art-card"><span class="art-card-eyebrow">I CAN DO IT!</span><span class="art-equation">x + 나 = 가능성</span><span class="art-face">◡</span></div><span class="art-sticker">나만의 속도로 ↗</span></div><span class="eyebrow">READY, SET, GROW!</span><h2>내가 풀어내는 순간,<br>수학이 조금 더 가까워져요.</h2><p>배울 내용을 고르면, 나에게 맞는 문제가 준비돼요.<br>틀려도 괜찮아요. 생각 길잡이가 함께할게요.</p><div class="welcome-features"><div><span>01</span><strong>톡, 누르면 바로 채점</strong><p>클릭도 터치도 편하게</p></div><div><span>02</span><strong>모르면 힌트 한 조각</strong><p>스스로 찾는 즐거움</p></div><div><span>03</span><strong>끝내면 다음 단계로</strong><p>기초부터 최상위까지</p></div></div>`
++  welcome.append(node('h3', '', '모르면, 함께 생각해요.'), node('p', '', '오답에는 힌트가, 막히는 순간에는 생각 길잡이가 있어요. 한 단계의 문제를 모두 풀면 다음 단계로 이어져요.'))
+   return welcome
+ }
+ function renderAll() {
++  guideLayout.beforeRender()
++  $('#app').dataset.view = !session ? 'setup' : generationController ? 'loading' : showingSummary ? 'summary' : 'study'
+   renderTrack()
+   const workspace = $('#quiz-workspace')
+   workspace.replaceChildren()
+@@ -263,7 +276,7 @@
+   if (!session) workspace.append(renderWelcome())
+   else if (generationController) {
+     const loading = node('div', 'loading-card')
+-    loading.append(node('div', 'loading-spark', '✳'), node('span', 'eyebrow', `${STAGES[pendingStage].name.toUpperCase()} · GETTING READY`), node('h2', '', '생각이 자라는 문제를 만들고 있어요.'), node('p', '', '선택한 성취기준과 난이도에 맞춰 문항과 힌트를 준비해요.'), node('div', 'skeleton-line'), node('div', 'skeleton-line short'), action('생성 취소', 'text-button', () => { generationController?.abort() }))
++    loading.append(node('div', 'loading-indicator'), node('h2', '', '생각이 자라는 문제를 만들고 있어요.'), node('p', '', '선택한 성취기준과 난이도에 맞춰 문항과 힌트를 준비해요.'), node('div', 'skeleton-line'), node('div', 'skeleton-line short'), action('생성 취소', 'text-button', () => { generationController?.abort() }))
+     workspace.append(loading)
+   } else {
+     if (generationError) workspace.append(node('p', 'error-notice', generationError))
+@@ -275,6 +288,7 @@
+     else workspace.append(renderQuestion())
+   }
+   renderGuide()
++  guideLayout.place()
+ }
+ function changeQuestion(index) {
+   if (!session || index < 0 || index >= session.questions.length) return
+@@ -290,7 +304,8 @@
+   const q = currentQuestion(), p = currentProgress()
+   const card = node('article', 'question-card')
+   const top = node('div', 'question-top')
+-  const badge = node('span', 'difficulty-badge', `${STAGES[session.stage].name} · ${session.questionIndex + 1} / ${session.questions.length}`)
++  const badge = node('span', 'difficulty-badge', `${STAGES[session.stage].name} ${session.questionIndex + 1} / ${session.questions.length}`)
++  badge.setAttribute('role', 'status')
+   const nav = node('nav', 'question-nav')
+   nav.setAttribute('aria-label', '이번 단계 문제 선택')
+   session.progress.forEach((progress, index) => {
+@@ -301,11 +316,11 @@
+   })
+   top.append(badge, nav)
+   const standard = session.settings.standards.find((s) => s.id === q.standardId)
+-  const standardLabel = node('p', 'question-standard', `${q.standardId.startsWith('custom-') ? '직접 입력한 성취기준' : q.standardId} · ${standard?.text ?? q.concept}`)
++  const standardLabel = node('p', 'question-standard', `${q.standardId.startsWith('custom-') ? '직접 입력한 성취기준' : q.standardId} / ${standard?.text ?? q.concept}`)
+   const title = rich('h2', 'question-title', q.prompt)
+   title.id = 'question-title'
+   card.setAttribute('aria-labelledby', title.id)
+-  card.append(top, standardLabel, title, renderVisual(q.visual))
++  card.append(top, title, renderVisual(q.visual))
+   const options = node('div', 'answer-options')
+   options.setAttribute('role', 'group')
+   options.setAttribute('aria-label', '정답을 골라 주세요')
+@@ -316,7 +331,7 @@
+     button.dataset.option = index
+     button.disabled = p.solved || wrong
+     button.append(node('span', 'option-number', String(index + 1)), rich('span', 'option-copy', option))
+-    if (wrong || correct) button.append(node('span', 'option-state', correct ? '✓ 정답' : '다시 생각해요'))
++    if (wrong || correct) button.append(node('span', 'option-state', correct ? '정답' : '다시 생각해요'))
+     options.append(button)
+   })
+   card.append(node('p', 'choice-instruction', '알맞은 보기를 눌러 보세요. 숫자 키 1~5로도 선택할 수 있어요.'), options)
+@@ -327,17 +342,17 @@
+     label.tabIndex = -1
+     const message = p.solved ? q.explanation : safeGuidance(q.hints[p.hintsUsed - 1], q, p.hintsUsed - 1)
+     feedback.append(label, rich('p', '', message))
+-    if (!p.solved) feedback.append(node('small', '', `힌트 ${p.hintsUsed} / 3 · 다른 보기를 골라 다시 도전해 보세요.`))
++    if (!p.solved) feedback.append(node('small', '', `힌트 ${p.hintsUsed} / 3. 다른 보기를 골라 다시 도전해 보세요.`))
+     card.append(feedback)
+   }
+   const bottom = node('div', 'question-bottom')
+-  const hint = action(`✧ 힌트 ${p.hintsUsed ? `${p.hintsUsed}/3` : '보기'}`, 'secondary-button', () => {
++  const hint = action(`힌트 ${p.hintsUsed ? `${p.hintsUsed}/3` : '보기'}`, 'secondary-button', () => {
+     p.hintsUsed = Math.min(3, p.hintsUsed + 1)
+     renderAll()
+     focusContent('#feedback-title', 'nearest')
+   })
+   hint.disabled = p.solved || p.hintsUsed >= 3
+-  const next = action(stageComplete(session.progress) ? '단계 결과 보기 →' : '다음 문제 →', 'primary-button', () => {
++  const next = action(stageComplete(session.progress) ? '단계 결과 보기' : '다음 문제', 'primary-button', () => {
+     if (stageComplete(session.progress)) { showingSummary = true; abortGuide(); renderAll(); focusContent('.summary-card h2') }
+     else {
+       const remaining = session.progress.findIndex((progress, index) => index > session.questionIndex && !progress.solved)
+@@ -346,7 +361,13 @@
+   })
+   next.disabled = !p.solved
+   bottom.append(hint, next)
+-  card.append(bottom)
++  const guideDisclosure = node('details', 'mobile-guide')
++  guideDisclosure.id = 'mobile-guide'
++  const guideSummary = node('summary', '', '생각 길잡이에게 질문하기')
++  const guideSlot = node('div')
++  guideSlot.id = 'mobile-guide-slot'
++  guideDisclosure.append(guideSummary, guideSlot)
++  card.append(bottom, guideDisclosure, standardLabel)
+   return card
+ }
+ function chooseAnswer(index) {
+@@ -363,14 +384,14 @@
+   const result = summarize(session.progress)
+   const final = session.stage === STAGES.length - 1
+   const card = node('section', 'summary-card')
+-  card.append(node('div', 'summary-medal', final ? '✳' : '✓'), node('span', 'eyebrow', final ? 'YOU DID IT!' : 'ONE STEP HIGHER!'), node('h2', '', final ? '최상위까지, 끝까지 해냈어요!' : `${STAGES[session.stage].name} 단계 완료!`), node('p', 'summary-subtitle', final ? '틀린 문제도 다시 생각하며 여기까지 온 과정이 실력이에요.' : '이번에 배운 개념을 가지고, 다음 도전으로 가 볼까요?'))
++  card.append(node('h2', '', final ? '최상위까지, 끝까지 해냈어요!' : `${STAGES[session.stage].name} 단계 완료!`), node('p', 'summary-subtitle', final ? '틀린 문제도 다시 생각하며 여기까지 온 과정이 실력이에요.' : '이번에 배운 개념을 가지고, 다음 도전으로 가 볼까요?'))
+   const stats = node('div', 'summary-stats')
+   ;[[`${result.solved}/${session.questions.length}`, '문제 완료'], [String(result.firstTry), '첫 시도 정답'], [String(result.retried), '다시 생각해 해결']].forEach(([value, label]) => {
+     const stat = node('div')
+     stat.append(node('strong', '', value), node('span', '', label))
+     stats.append(stat)
+   })
+-  card.append(stats)
++  card.append(node('h3', 'stats-heading', `${STAGES[session.stage].name} 단계 결과`), stats)
+   const review = node('div', 'review-box')
+   review.append(node('h3', '', '이번 단계에서 익힌 개념'))
+   const concepts = node('div', 'concept-tags')
+@@ -380,13 +401,13 @@
+   if (final) {
+     const all = [...session.history, { ...result }]
+     card.append(
+-      node('p', 'completion-total', `총 ${all.reduce((n, s) => n + s.solved, 0)}문항 완료 · 첫 시도 정답 ${all.reduce((n, s) => n + s.firstTry, 0)}문항`),
++      node('p', 'completion-total', `총 ${all.reduce((n, s) => n + s.solved, 0)}문항 완료, 첫 시도 정답 ${all.reduce((n, s) => n + s.firstTry, 0)}문항`),
+       node('p', 'next-stage-note', '같은 단원에 다시 도전하면 이전과 다른 문제를 만나요.'),
+-      action('같은 단원, 새 문제로 다시 도전 ↻', 'primary-button', () => begin(structuredClone(session.settings), session.mode)),
++      action('같은 단원 다시 풀기', 'primary-button', () => begin(structuredClone(session.settings), session.mode)),
+       action('다른 단원 선택하기', 'text-button', resetSession),
+     )
+   } else {
+-    card.append(node('p', 'next-stage-note', `다음은 ${STAGES[session.stage + 1].name} · ${STAGES[session.stage + 1].subtitle}`), action(generationError ? '다음 단계 생성 다시 시도 →' : `${STAGES[session.stage + 1].name} 단계 시작 →`, 'primary-button', () => void loadStage(session.stage + 1)))
++    card.append(node('p', 'next-stage-note', `다음 학습: ${STAGES[session.stage + 1].name}, ${STAGES[session.stage + 1].subtitle}`), action(generationError ? '다음 단계 다시 생성' : `${STAGES[session.stage + 1].name} 단계 시작`, 'primary-button', () => void loadStage(session.stage + 1)))
+   }
+   card.append(action('이번 단계 문제 다시 보기', 'text-button', () => changeQuestion(0)))
+   return card
+@@ -395,12 +416,22 @@
+ function renderGuide() {
+   const available = Boolean(currentQuestion()) && !generationController && !showingSummary
+   if (!available) $('#guide-error').hidden = true
+-  $('#guide-context').textContent = available ? `지금 함께 보는 개념 · ${currentQuestion().concept}` : showingSummary ? '잘 해냈어요. 다음 도전도 함께해요!' : '퀴즈를 시작하면 함께할게요'
++  $('#guide-form').hidden = !available
++  $('#guide-prompts').hidden = !available
++  $('.guide-note').hidden = !available
++  $('#guide-context').textContent = available ? `지금 함께 보는 개념: ${currentQuestion().concept}` : showingSummary ? '잘 해냈어요. 다음 도전도 함께해요!' : '퀴즈를 시작하면 함께할게요'
+   $('#guide-log').replaceChildren()
+   const thread = available ? session.threads[session.questionIndex] : []
+   if (!thread.length) {
+     const message = node('div', 'guide-bubble')
+-    message.append(node('strong', '', '안녕! 나는 생각 길잡이야. ✦'), node('p', '', available ? '어디서부터 풀어야 할지 막막한가요? 헷갈리는 부분을 말해 주세요. 필요한 개념부터 하나씩 살펴볼게요.' : '정답을 바로 말해 주는 대신, 스스로 풀 수 있도록 작은 질문과 개념 설명을 건넬게요.'))
++    if (available) {
++      message.append(node('strong', '', '함께 생각해 볼까요?'), node('p', '', '어디서부터 풀어야 할지 막막한가요? 헷갈리는 부분을 말해 주세요. 필요한 개념부터 하나씩 살펴볼게요.'))
++    } else {
++      const messageText = showingSummary
++        ? session.stage === STAGES.length - 1 ? '선택한 학습 과정을 모두 마쳤어요. 같은 단원의 새 문제나 다른 단원으로 다시 도전할 수 있어요.' : '이번 단계를 마쳤어요. 다음 단계를 시작하면 새 문제의 개념도 함께 살펴볼게요.'
++        : generationController ? '새 문제를 준비하고 있어요. 준비가 끝나면 헷갈리는 개념부터 함께 살펴봐요.' : '문제가 준비되면 궁금한 부분을 질문할 수 있어요.'
++      message.append(node('p', '', messageText))
++    }
+     $('#guide-log').append(message)
+   } else thread.forEach((message) => $('#guide-log').append(rich('div', `guide-bubble ${message.role === 'user' ? 'guide-user' : ''}`, message.content)))
+   if (guideController) $('#guide-log').append(node('div', 'guide-thinking', '작은 실마리를 찾고 있어요…'))
+--- before/src/style.css
++++ after/src/style.css
+@@ -1,232 +1,300 @@
+-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
++/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full · nav: compact learning shell · footer: course note · signature: a math question with its thinking guide · states: setup loading empty error question feedback summary · axes: light paper / Korean sans / violet and lime · posture: restrained · imagery: mathematical diagrams · contrast: pass · v2.0.0 */
++/* Hallmark · pre-emit critique: P4 H5 E4 S4 R5 V4 · weakest: S, replaced the generic welcome illustration with the real five-stage learning course and the working setup form */
++/* Hallmark · finish-review: subagent · 5 findings · 5 resolved · hero-review: not applicable, app screen · sweep: 0 FAIL 0 REFLEX 0 WARN */
++/* Hallmark · reworded "한 단계씩, 수학 자신감." to "오늘의 수학 퀴즈" · 54 replaces the generic opener with the screen task */
++/* Hallmark · reworded "내가 풀어내는 순간, 수학이 조금 더 가까워져요." to "모르면, 함께 생각해요." · 69 removes welcome copy that repeated the course explanation */
++/* Hallmark · reworded "작은 도전, 큰 성장." to "퀴즈팝 사용 방법" · 54 gives the help dialog a functional heading */
++@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
++@import url('./tokens.css');
++@import url('./base.css');
+ 
+-:root { font-family: 'DM Sans', 'Noto Sans KR', sans-serif; color: #29262f; background: #f6f4fa; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; --ink: #29262f; --purple: #7543d7; --lime: #c0f86b; --muted: #7b7386; --line: #e8e2ee; }
+-* { box-sizing: border-box; }
+-body { margin: 0; min-width: 320px; }
+-h1, h2, h3, p, figure { margin: 0; }
+-button, input, textarea, select { font: inherit; }
+-button { cursor: pointer; color: inherit; }
+-button, a { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+-button { transition: background 150ms, border-color 150ms, transform 150ms; }
+-button:disabled { cursor: default; }
+-a { color: inherit; }
+-[hidden] { display: none !important; }
+-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid #9b75e5; outline-offset: 3px; }
+-input, select, textarea { width: 100%; color: var(--ink); background: #fff; border: 1px solid #dcd4e7; border-radius: 9px; padding: 11px 12px; font-size: 13px; line-height: 1.6; }
+-select { min-height: 44px; }
+-textarea { resize: vertical; min-height: 68px; }
+-input::placeholder, textarea::placeholder { color: #938a9f; }
+-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+-fieldset:disabled { opacity: .65; }
+-input:disabled, textarea:disabled, select:disabled { background: #f8f6fa; }
+-#app { max-width: 1680px; padding: 0 42px; margin: 0 auto; }
+-.site-header { height: 98px; display: flex; gap: 26px; align-items: center; border-bottom: 1px solid #e3dce9; }
+-.wordmark { display: flex; align-items: center; text-decoration: none; font-size: 28px; font-weight: 900; letter-spacing: -1.8px; white-space: nowrap; }
+-.wordmark > span:not(.logo-mark) { color: var(--purple); }
+-.wordmark i { font-style: normal; color: var(--purple); }
+-.logo-mark { display: grid; place-items: center; width: 41px; height: 41px; margin-right: 10px; border: 1.5px solid var(--ink); border-radius: 12px; background: var(--lime); font-size: 34px; line-height: 1; }
+-.header-description { font-size: 13px; color: var(--muted); }
+-.header-actions { margin-left: auto; display: flex; align-items: center; gap: 15px; }
+-.audience-badge { border: 1px solid #e1d8ee; color: #705b8c; background: #eeE7f8; padding: 8px 12px; border-radius: 30px; font-size: 11px; font-weight: 600; }
+-.icon-button { border: 1px solid #dcd3e7; background: white; width: 44px; height: 44px; border-radius: 50%; font-size: 17px; font-weight: 700; }
+-.app-layout { display: grid; grid-template-columns: 284px minmax(0, 1fr) 300px; gap: 25px; align-items: start; padding: 32px 0; }
+-.settings-panel { background: white; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+-.settings-panel details > summary { padding: 22px 19px; display: flex; gap: 11px; align-items: center; cursor: pointer; list-style: none; }
+-.settings-panel summary::-webkit-details-marker { display: none; }
+-.settings-panel summary > span:nth-child(2) { font-size: 15px; font-weight: 800; }
+-.settings-panel summary small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 5px; }
+-.section-icon { display: grid; place-items: center; width: 34px; height: 34px; background: #f0e9fa; border-radius: 10px; color: var(--purple); font-size: 20px; }
+-.details-chevron { margin-left: auto; color: #9484a7; }
+-#settings-form { padding: 0 19px 20px; }
+-.field-label { display: block; font-size: 12px; font-weight: 700; margin: 18px 0 8px; }
+-.field-label:first-child { margin-top: 0; }
+-.field-label > span { font-size: 10px; color: #9a90a5; font-weight: 400; margin-left: 3px; }
+-.label-row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 18px; }
+-.label-row .field-label { margin: 0 0 8px; }
+-.tiny-label { font-size: 10px; color: #8f839e; }
+-.standards-list { display: grid; gap: 7px; }
+-.standard-option { display: flex; align-items: flex-start; gap: 8px; padding: 11px 10px; border: 1px solid #e7e0ef; border-radius: 9px; font-size: 11px; line-height: 1.65; cursor: pointer; }
+-.standard-option:has(input:checked) { border-color: #bb9de8; background: #f5efff; }
+-.standard-option input { accent-color: var(--purple); width: 16px; height: 16px; margin: 2px 0 0; flex: 0 0 auto; }
+-.standard-code { display: block; color: #8464af; font-size: 10px; font-weight: 600; margin-bottom: 3px; }
+-.source-note { margin-top: 9px; font-size: 10px; line-height: 1.8; color: #8c8198; }
+-.source-note a { color: #765498; text-underline-offset: 2px; white-space: nowrap; }
+-.field-divider { border-top: 1px dashed #e1d8eb; margin-top: 22px; }
+-.primary-button, .secondary-button { display: inline-flex; justify-content: center; align-items: center; gap: 12px; min-height: 46px; border-radius: 10px; padding: 11px 18px; font-size: 13px; font-weight: 700; }
+-.primary-button { background: var(--lime); border: 1.5px solid var(--ink); box-shadow: 2px 3px 0 var(--ink); }
+-.primary-button:hover:not(:disabled) { background: #adea53; transform: translateY(-1px); }
+-.primary-button:disabled { background: #eef0e9; border-color: #d0d3ca; color: #92988a; box-shadow: none; }
+-.secondary-button { border: 1px solid #dfd3ed; background: white; color: #70558c; }
+-.secondary-button:hover:not(:disabled) { background: #f4edff; border-color: #aa86d4; }
+-.secondary-button:disabled { opacity: .45; }
+-.start-button, .reset-settings { width: 100%; margin-top: 23px; }
+-.start-button span { font-size: 19px; margin-left: auto; }
+-.text-button { border: 0; background: transparent; color: #846d9e; font-size: 12px; min-height: 44px; padding: 8px 4px; text-underline-offset: 4px; }
+-.text-button:hover { color: var(--purple); text-decoration: underline; }
+-.demo-button { width: 100%; margin-top: 5px; font-size: 11px; }
+-.setup-footnote { font-size: 10px; color: #958a9f; text-align: center; line-height: 1.7; margin-top: 8px; }
+-.settings-bottom { display: flex; align-items: center; gap: 6px; padding: 13px 16px; background: #faf8fd; border-top: 1px solid #eee9f3; font-size: 10px; color: #897b97; flex-wrap: wrap; }
+-.connection-dot, .guide-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #a797b8; flex: 0 0 auto; }
+-.connection-dot[data-state='success'], .connection-dot[data-state='ready'] { background: #56a873; }
+-.connection-dot[data-state='error'] { background: #d36064; }
+-.connection-dot[data-state='loading'] { background: #9b69dc; animation: pulse 1s infinite; }
+-.model-label { margin-left: auto; font-size: 9px; color: #a094ac; }
+-.learning-column { min-width: 0; padding-top: 5px; }
+-.learning-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+-.eyebrow { font-size: 10px; font-weight: 800; letter-spacing: 1.6px; color: #8962ae; }
+-.session-chip { color: #8b799d; background: #ede6f4; border-radius: 30px; padding: 5px 10px; font-size: 10px; }
+-.journey-heading { margin: 17px 0 23px; }
+-.journey-heading h1 { font-size: clamp(23px, 2vw, 31px); font-weight: 800; letter-spacing: -1.4px; line-height: 1.5; overflow-wrap: anywhere; }
+-.journey-heading p { color: #897c96; font-size: 12px; line-height: 1.8; margin-top: 7px; }
+-.stage-track { display: flex; list-style: none; padding: 0 0 23px; margin: 0; isolation: isolate; }
+-.stage-track li { flex: 1; position: relative; text-align: center; min-width: 0; padding: 0 3px; }
+-.stage-track li::before { content: ''; position: absolute; top: 16px; left: -50%; right: 50%; height: 2px; background: #e3dbea; z-index: -1; }
+-.stage-track li:first-child::before { display: none; }
+-.stage-number { width: 34px; height: 34px; display: grid; place-items: center; margin: 0 auto 8px; background: #ece6f2; color: #9b8cab; border: 1px solid #e0d7e9; border-radius: 50%; font-size: 12px; font-weight: 700; }
+-.stage-track strong { font-size: 12px; display: block; color: #9a8aa9; }
+-.stage-track small { color: #a89ab4; font-size: 9px; display: block; margin-top: 4px; }
+-.stage-track .active .stage-number { background: var(--purple); color: white; border-color: var(--purple); box-shadow: 0 0 0 5px #e9ddf9; }
+-.stage-track .active strong { color: var(--purple); }
+-.stage-track .complete .stage-number { background: var(--lime); color: #38551b; border-color: #9ec95d; }
+-.stage-track .complete strong { color: #5d7b35; }
+-.stage-track .skipped { opacity: .45; }
+-.session-progress { margin: 0 0 20px; }
+-.session-progress > div { display: flex; justify-content: space-between; font-size: 11px; color: #8c7f9b; margin-bottom: 8px; }
+-.session-progress strong { color: #73588f; font-weight: 600; }
+-progress { width: 100%; height: 6px; display: block; appearance: none; border: none; background: #e8e0f0; border-radius: 20px; overflow: hidden; }
+-progress::-webkit-progress-bar { background: #e8e0f0; }
+-progress::-webkit-progress-value { background: #9b77da; border-radius: 20px; transition: width 300ms; }
+-progress::-moz-progress-bar { background: #9b77da; border-radius: 20px; }
+-.welcome-card, .question-card, .summary-card, .loading-card { border: 1.5px solid #dcd2e7; border-radius: 18px; background: white; overflow: hidden; }
+-.welcome-card { padding: 27px 24px 0; text-align: center; }
+-.welcome-art { position: relative; height: 210px; width: min(320px, 100%); margin: 0 auto 8px; }
+-.art-card { position: absolute; inset: 33px 37px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--lime); border: 2px solid var(--ink); border-radius: 15px; box-shadow: 6px 7px 0 #e3d8f4; transform: rotate(-7deg); }
+-.art-card-eyebrow { font-size: 9px; font-weight: 900; letter-spacing: 1.3px; }
+-.art-equation { font-size: 23px; font-weight: 800; letter-spacing: -1px; }
+-.art-face { font-size: 28px; line-height: .6; }
+-.art-orbit { position: absolute; font-size: 39px; color: var(--purple); }
+-.orbit-one { left: 5px; top: 14px; transform: rotate(-10deg); }
+-.orbit-two { right: 10px; top: 11px; font-size: 43px; color: #ed9274; }
+-.art-sticker { position: absolute; bottom: 17px; right: 7px; transform: rotate(6deg); background: #e5d9fb; border: 1.5px solid var(--ink); border-radius: 6px; padding: 7px 13px; font-size: 11px; font-weight: 700; }
+-.welcome-card h2 { font-size: clamp(21px, 1.8vw, 27px); letter-spacing: -1.2px; line-height: 1.6; margin: 15px 0 13px; }
+-.welcome-card > p { color: #8c7e9a; font-size: 12px; line-height: 2; }
+-.welcome-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; border-top: 1px solid #ece6f3; padding: 23px 0; margin-top: 28px; }
+-.welcome-features > div { text-align: left; padding-left: 5px; }
+-.welcome-features span { color: #a18db9; font-size: 10px; font-weight: 700; }
+-.welcome-features strong { display: block; font-size: 10px; margin: 7px 0; letter-spacing: -.3px; }
+-.welcome-features p { color: #a092ac; font-size: 9px; }
+-.question-card { padding: 25px; box-shadow: 3px 4px 0 #e5dbee; }
+-.question-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+-.difficulty-badge { background: #f0e6fc; color: #8052b4; font-size: 11px; font-weight: 700; padding: 7px 10px; border-radius: 6px; white-space: nowrap; }
+-.question-nav { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+-.question-dot { min-width: 32px; height: 36px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #a294af; font-size: 12px; }
+-.question-dot.current { border-color: #b190d9; background: #f4edfc; color: #79539f; }
+-.question-dot.solved { color: #557c2e; background: #f0f7e7; }
+-.question-standard { font-size: 10px; color: #9e8caf; line-height: 1.7; margin: 17px 0 10px; }
+-.question-title { font-size: 20px; line-height: 1.85; letter-spacing: -.6px; font-weight: 700; overflow-wrap: anywhere; white-space: pre-wrap; }
+-.question-visual { background: #f9f7fd; border: 1px solid #e9e1f2; border-radius: 12px; padding: 16px; margin: 22px 0; }
+-.visual-heading { color: #8b759f; font-size: 10px; font-weight: 700; margin-bottom: 16px; }
+-.concept-cards { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 7px 0; }
+-.concept-card { background: white; border: 1px solid #ded3ed; border-radius: 10px; padding: 15px 18px; font-size: 15px; text-align: center; min-width: 48px; overflow-x: auto; max-width: 100%; }
+-.question-visual figcaption { font-size: 11px; color: #8f809f; margin-top: 15px; line-height: 1.8; text-align: center; }
+-.question-visual svg { display: block; width: 100%; height: auto; max-height: 270px; }
+-.question-visual svg text { font: 14px 'DM Sans', 'Noto Sans KR', sans-serif; fill: #736482; }
+-.chart-axis { stroke: #b7a6c7; stroke-width: 1.7; }
+-.chart-grid { stroke: #e6deee; stroke-width: 1; }
+-.chart-tick { stroke: #b7a6c7; stroke-width: 1.5; }
+-.chart-line { stroke: #9971d1; stroke-width: 3; }
+-.chart-point { fill: #b7ee69; stroke: #705099; stroke-width: 2; }
+-.chart-bar { fill: #b79ae2; }
+-.choice-instruction { font-size: 11px; color: #94839f; line-height: 1.8; margin-bottom: 12px; }
+-.answer-options { display: grid; gap: 10px; }
+-.answer-option { display: flex; align-items: center; gap: 13px; text-align: left; border: 1.5px solid #e5ddec; background: white; border-radius: 10px; min-height: 61px; padding: 10px 15px; min-width: 0; }
+-.answer-option:hover:not(:disabled) { border-color: #9c77cb; background: #fcfaff; }
+-.option-number { width: 30px; height: 30px; flex: 0 0 auto; border-radius: 8px; background: #f1edf7; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #9276ad; }
+-.option-copy { font-size: 16px; min-width: 0; overflow-x: auto; line-height: 1.9; overflow-wrap: anywhere; }
+-.option-state { font-size: 10px; margin-left: auto; white-space: nowrap; }
+-.answer-option.is-wrong { border-color: #edc5bc; background: #fff9f6; color: #b26e5e; }
+-.is-wrong .option-number { background: #f7e6df; color: #b57c6a; }
+-.answer-option.is-correct { border-color: #91b966; background: #f5faec; color: #3e6b27; }
+-.is-correct .option-number { background: #c8e89d; color: #3c6525; }
+-.answer-feedback { padding: 17px; border-radius: 11px; margin-top: 20px; }
+-.answer-feedback h3 { font-size: 13px; line-height: 1.7; }
+-.answer-feedback h3:focus { outline: none; }
+-.answer-feedback p { font-size: 13px; line-height: 1.95; margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+-.answer-feedback small { display: block; font-size: 10px; line-height: 1.7; margin-top: 10px; opacity: .8; }
+-.feedback-hint { border: 1px solid #e3d2a0; background: #fffbef; color: #8b6d2b; }
+-.feedback-success { border: 1px solid #c9dfae; background: #f4faec; color: #537b3b; }
+-.question-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid #eee7f4; margin-top: 23px; padding-top: 20px; }
+-.learning-footnote { font-size: 10px; line-height: 1.8; text-align: center; color: #a092ae; padding: 20px 12px 0; }
+-.guide-panel { position: sticky; top: 24px; border: 1px solid #dcd0ec; background: #fdfcff; border-radius: 16px; overflow: hidden; }
+-.guide-top { display: flex; align-items: center; gap: 10px; padding: 21px 18px; }
+-.guide-avatar { display: grid; place-items: center; border: 1.5px solid #b08ad9; border-radius: 11px; color: #8a57bd; background: #ede1fb; width: 38px; height: 38px; font-size: 26px; }
+-.guide-top h2 { font-size: 15px; font-weight: 800; }
+-.guide-top p { font-size: 10px; color: #9b88ab; margin-top: 4px; }
+-.guide-status-dot { background: #a0b780; margin-left: auto; }
+-.guide-context { padding: 10px 18px; border-top: 1px solid #eee6f7; border-bottom: 1px solid #eee6f7; background: #f5f0fb; font-size: 10px; line-height: 1.7; color: #9b83af; }
+-.guide-log { display: flex; flex-direction: column; gap: 13px; max-height: 420px; min-height: 250px; overflow-y: auto; padding: 20px 16px; scrollbar-width: thin; }
+-.guide-bubble { background: #f1eafa; border-radius: 3px 12px 12px 12px; padding: 14px; font-size: 12px; line-height: 1.95; color: #79658e; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+-.guide-bubble strong { font-weight: 700; font-size: 12px; color: #77518f; }
+-.guide-bubble p { margin-top: 9px; }
+-.guide-user { background: #e6def3; border-radius: 12px 3px 12px 12px; align-self: flex-end; color: #65537b; }
+-.guide-thinking { font-size: 11px; color: #a18bb2; animation: pulse 1s infinite alternate; }
+-.guide-prompts { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 15px; }
+-.guide-prompts:empty { padding-bottom: 0; }
+-.guide-prompt { padding: 8px 10px; background: white; color: #8a6ba2; border: 1px solid #dfd2ec; border-radius: 7px; font-size: 10px; min-height: 36px; }
+-.guide-prompt:hover { background: #f4edfb; }
+-#guide-form { padding: 0 16px; }
+-.guide-composer { display: flex; align-items: flex-end; gap: 6px; border: 1px solid #dbcaee; border-radius: 10px; padding: 8px; background: white; }
+-.guide-composer:focus-within { border-color: #9f7bc6; box-shadow: 0 0 0 2px #ede5f8; }
+-.guide-composer textarea { border: 0; background: transparent; resize: vertical; padding: 2px; font-size: 12px; min-height: 55px; max-height: 150px; }
+-.guide-composer textarea:focus-visible { outline: none; }
+-.guide-composer button { width: 36px; height: 36px; border: 0; border-radius: 8px; background: #ad8bda; color: white; font-size: 21px; flex: 0 0 auto; }
+-.guide-composer button:disabled { background: #e7def0; color: #b7a7c7; }
+-.guide-note { padding: 13px 17px 18px; text-align: center; font-size: 9px; line-height: 1.9; color: #aa99b8; }
+-.summary-card { padding: 36px 25px; text-align: center; box-shadow: 3px 4px 0 #e5dbee; }
+-.summary-medal { display: grid; place-items: center; width: 75px; height: 75px; font-size: 43px; border-radius: 24px; border: 1.5px solid #9dbe6a; background: #e6f8cb; color: #5b8535; margin: 0 auto 24px; transform: rotate(-7deg); }
+-.summary-card h2 { font-size: 25px; letter-spacing: -1px; margin: 13px 0 12px; line-height: 1.6; }
+-.summary-subtitle { color: #8e7b9d; font-size: 12px; line-height: 1.9; }
+-.summary-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin: 28px 0; background: #f8f5fc; border-radius: 13px; padding: 24px 10px; }
+-.summary-stats strong { display: block; font-size: 25px; color: #8760b2; margin-bottom: 7px; }
+-.summary-stats span { font-size: 10px; color: #a28cb2; }
+-.review-box { text-align: left; border: 1px dashed #dcd0e8; padding: 16px; border-radius: 10px; }
+-.review-box h3 { font-size: 11px; color: #9a83ac; margin-bottom: 12px; }
+-.concept-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+-.concept-tags span { font-size: 10px; line-height: 1.6; color: #8b6aa6; border-radius: 6px; padding: 6px 8px; background: #f2ebfa; }
+-.next-stage-note, .completion-total { font-size: 12px; color: #9c86ae; margin: 25px 0 14px; line-height: 1.8; }
+-.summary-card > .text-button { display: block; margin: 14px auto 0; }
+-.loading-card { padding: 52px 25px; text-align: center; }
+-.loading-spark { font-size: 60px; color: var(--purple); margin-bottom: 20px; animation: pulse 1.3s infinite alternate; }
+-.loading-card h2 { font-size: 20px; letter-spacing: -.7px; margin: 17px 0 12px; line-height: 1.7; }
+-.loading-card p { font-size: 12px; line-height: 1.9; color: #a08bae; margin-bottom: 25px; }
+-.skeleton-line { height: 22px; border-radius: 7px; margin: 12px auto; background: linear-gradient(90deg, #f0eaf7, #f9f6fc, #f0eaf7); width: 90%; background-size: 200% 100%; animation: skeleton 1.5s infinite linear; }
+-.skeleton-line.short { width: 65%; }
+-.loading-card .text-button { margin-top: 15px; }
+-.error-notice, .inline-error { font-size: 12px; line-height: 1.8; color: #a74f49; background: #fff3ef; border: 1px solid #ecc6bd; border-radius: 9px; padding: 12px; overflow-wrap: anywhere; }
+-.error-notice { margin-bottom: 16px; }
+-.inline-error { margin-top: 16px; }
+-.guide-error { margin: 0 16px 12px; font-size: 11px; }
+-.katex { white-space: normal; overflow-wrap: normal; font-size: 1.1em; }
+-.katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; margin: .65em 0; padding: .2em 0; }
+-.site-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid #e8e1ee; padding: 20px 0 25px; }
+-.site-footer > span { font-size: 9px; color: #927da2; letter-spacing: 1px; font-weight: 700; }
+-.site-footer p { font-size: 10px; color: #a391af; line-height: 1.8; }
+-.site-footer button { background: transparent; border: 0; padding: 6px; font-size: 10px; color: #9071a5; text-decoration: underline; }
+-dialog { width: min(540px, calc(100% - 32px)); border: 1.5px solid var(--ink); border-radius: 17px; padding: 30px; background: #fdfbff; color: var(--ink); box-shadow: 7px 7px 0 #c8b0e6; }
+-dialog::backdrop { background: #2e223f66; backdrop-filter: blur(4px); }
+-.close-dialog { position: absolute; right: 14px; top: 12px; width: 36px; height: 36px; border: 0; background: transparent; font-size: 25px; color: #9a85aa; }
+-dialog h2 { margin: 15px 0 20px; font-size: 26px; letter-spacing: -1px; }
+-dialog ol { padding-left: 20px; font-size: 13px; line-height: 1.95; }
+-dialog li { margin-bottom: 12px; padding-left: 5px; }
+-.local-help { padding: 16px; background: #f3edf9; border-radius: 10px; margin-top: 25px; font-size: 11px; line-height: 1.95; color: #8a729d; }
+-.local-help p { margin-top: 8px; }
+-code { font-family: ui-monospace, monospace; font-size: .95em; overflow-wrap: anywhere; }
+-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+-@keyframes pulse { from { opacity: .5; } to { opacity: 1; } }
+-@keyframes skeleton { to { background-position: -200% 0; } }
+-@media (min-width: 1450px) { .app-layout { grid-template-columns: 300px minmax(0, 1fr) 320px; gap: 32px; } .question-title { font-size: 22px; } .welcome-art { margin-top: 20px; height: 240px; } .art-card { inset-block: 45px; } .guide-log { min-height: 290px; } }
+-@media (max-width: 1250px) { #app { padding: 0 28px; } .app-layout { grid-template-columns: 263px minmax(0, 1fr); grid-template-areas: 'settings learning' 'settings guide'; gap: 24px; } .settings-panel { grid-area: settings; } .learning-column { grid-area: learning; } .guide-panel { grid-area: guide; position: static; } .guide-log { min-height: 140px; max-height: 350px; } .guide-note br { display: none; } }
+-@media (max-width: 900px) { #app { padding: 0 20px; } .app-layout { grid-template-columns: 240px minmax(0, 1fr); gap: 18px; } .header-description { display: none; } .stage-track small { display: none; } .question-card { padding: 20px; } .question-title { font-size: 18px; } .question-top { flex-wrap: wrap; } .welcome-features { grid-template-columns: 1fr; gap: 14px; } .welcome-features > div { display: flex; align-items: center; gap: 9px; } .welcome-features p { margin-left: auto; } .welcome-art { height: 190px; } .site-footer { flex-wrap: wrap; gap: 6px; } }
+-@media (max-width: 760px) { #app { padding: 0 17px; } .site-header { height: 80px; gap: 10px; } .wordmark { font-size: 25px; } .audience-badge { font-size: 9px; padding: 7px 9px; } .header-actions { gap: 7px; } .icon-button { width: 36px; height: 36px; } .app-layout { display: flex; flex-direction: column; gap: 25px; padding-top: 22px; } .app-layout > * { width: 100%; } .settings-panel summary { padding: 18px; } #settings-form { padding-inline: 18px; } input, select, textarea { font-size: 16px; } .settings-bottom { padding-block: 11px; } .journey-heading h1 { font-size: 28px; } .journey-heading p { font-size: 12px; } .stage-track small { display: block; font-size: 8px; } .question-title { font-size: 20px; } .question-visual { padding: 14px; } .guide-log { min-height: 155px; } .guide-composer textarea { font-size: 16px; } .guide-note { font-size: 10px; } .site-footer p { font-size: 10px; } .welcome-features { grid-template-columns: repeat(3, 1fr); } .welcome-features > div { display: block; } .welcome-art { height: 210px; } .question-dot { min-width: 35px; height: 40px; } .guide-prompt { min-height: 44px; font-size: 11px; } }
+-@media (max-width: 420px) { #app { padding: 0 12px; } .audience-badge { max-width: 128px; white-space: nowrap; padding-inline: 7px; } .logo-mark { width: 35px; height: 35px; font-size: 29px; margin-right: 7px; } .wordmark { font-size: 23px; } .stage-track small { display: none; } .question-card { padding: 17px; } .question-title { font-size: 18px; } .answer-option { padding: 9px 11px; gap: 10px; } .option-copy { font-size: 15px; } .option-state { font-size: 9px; } .primary-button, .secondary-button { font-size: 12px; padding-inline: 13px; } .welcome-card { padding-inline: 16px; } .welcome-features strong { font-size: 9px; } .welcome-features p { font-size: 8px; } .session-chip { font-size: 9px; } .eyebrow { font-size: 9px; letter-spacing: 1.2px; } }
++#app { max-width: var(--container); margin-inline: auto; padding-inline: var(--gutter); }
++.site-header { min-height: 80px; display: flex; align-items: center; gap: var(--space-lg); border-bottom: 1px solid var(--color-rule); }
++.wordmark { display: inline-flex; align-items: center; gap: var(--space-xs); color: var(--color-ink); font-size: var(--text-xl); font-weight: 700; text-decoration: none; white-space: nowrap; letter-spacing: var(--tracking-display); }
++.logo-mark { width: 32px; height: 32px; flex-shrink: 0; }
++.logo-surface { fill: var(--color-action); stroke: var(--color-ink); stroke-width: 1; }
++.logo-strokes { fill: none; stroke: var(--color-ink); stroke-width: 1.8; stroke-linecap: round; }
++.header-description { font-size: var(--text-sm); color: var(--color-muted); }
++.header-actions { margin-left: auto; display: flex; align-items: center; gap: var(--space-lg); min-width: 0; }
++.audience-badge span { white-space: nowrap; }
++.audience-badge { font-size: var(--text-sm); color: var(--color-muted); }
++.icon-button, .text-button { min-height: 44px; padding: var(--space-xs) var(--space-sm); border: 1px solid transparent; border-radius: var(--radius-control); color: var(--color-ink-2); background: transparent; font-size: var(--text-sm); font-weight: 500; }
++.icon-button:hover, .text-button:hover { background: var(--color-paper-3); }
++.icon-button:active, .text-button:active { transform: translateY(1px); }
++button:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
++.icon-button:disabled, .text-button:disabled { color: var(--color-disabled); background: var(--color-disabled-fill); cursor: not-allowed; }
++.page-intro { display: flex; align-items: center; justify-content: space-between; gap: var(--space-lg); padding-block: var(--space-columns); }
++.journey-heading { min-width: 0; }
++.journey-heading p { margin-top: var(--space-xs); color: var(--color-muted); font-size: var(--text-md); }
++.session-chip { flex-shrink: 0; font-size: var(--text-sm); color: var(--color-muted); }
++.app-layout { display: grid; grid-template-columns: minmax(0, 1fr) 288px; grid-template-areas: 'settings learning'; gap: var(--gap-columns); align-items: start; padding-bottom: var(--space-xl); }
++.settings-panel { grid-area: settings; min-width: 0; }
++#settings-details > summary { display: flex; align-items: center; gap: var(--space-md); min-height: 48px; padding: var(--space-md) 0; list-style: none; cursor: pointer; border-block: 1px solid var(--color-rule); }
++#settings-details > summary::-webkit-details-marker { display: none; }
++.settings-summary-title { color: var(--color-ink); font-size: var(--text-md); font-weight: 700; }
++#settings-summary-info { color: var(--color-muted); font-size: var(--text-sm); }
++.details-chevron { margin-left: auto; color: var(--color-ink-2); }
++#settings-form { padding-top: var(--space-lg); }
++fieldset { min-width: 0; border: 0; padding: 0; margin: 0; }
++#settings-fields { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); column-gap: var(--space-columns); row-gap: var(--space-lg); }
++.settings-content, .settings-method { min-width: 0; }
++.settings-content h2, .settings-method h2 { font-size: var(--text-lg); margin-bottom: var(--space-lg); }
++.settings-method { padding-left: var(--space-columns); border-left: 1px solid var(--color-rule); }
++.field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
++.field-label { display: block; font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-xs); }
++.field-label > span { font-weight: 400; color: var(--color-muted); margin-left: var(--space-2xs); }
++input, select, textarea { width: 100%; min-height: 48px; padding: var(--space-sm); border: 1px solid var(--color-control-rule); border-radius: var(--radius-control); background: var(--color-paper); color: var(--color-ink); font-size: var(--text-md); line-height: 1.5; }
++input::placeholder, textarea::placeholder { color: var(--color-muted); }
++input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
++textarea { resize: vertical; min-height: 88px; }
++fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea, textarea:disabled { background: var(--color-disabled-fill); color: var(--color-disabled); border-color: var(--color-control-rule); cursor: not-allowed; }
++fieldset:disabled .standard-option { color: var(--color-disabled); cursor: not-allowed; }
++#custom-unit-label { margin-top: var(--space-md); }
++.label-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-xs); margin-top: var(--space-lg); margin-bottom: var(--space-xs); }
++.label-row .field-label { margin: 0; }
++.tiny-label { font-size: var(--text-xs); color: var(--color-muted); }
++.standards-list { display: grid; }
++.standard-option { display: flex; align-items: flex-start; gap: var(--space-sm); padding: var(--space-sm) var(--space-xs); border-bottom: 1px solid var(--color-rule); font-size: var(--text-sm); line-height: 1.65; cursor: pointer; }
++.standard-option:has(input:checked) { color: var(--color-ink); background: var(--color-accent-soft); }
++.standard-option:hover:not(:has(input:disabled)) { background: var(--color-paper-3); }
++.standard-option:has(input:focus-visible) { outline: 3px solid var(--color-focus); outline-offset: 2px; }
++.standard-option input { width: 20px; min-height: 20px; height: 20px; margin: var(--space-3xs) 0 0; padding: 0; flex-shrink: 0; accent-color: var(--color-accent); }
++.standard-code { display: block; color: var(--color-muted); font-size: var(--text-xs); margin-bottom: var(--space-2xs); }
++.source-note { margin-top: var(--space-sm); color: var(--color-muted); font-size: var(--text-xs); line-height: 1.65; }
++.source-note a { white-space: nowrap; }
++.settings-method select + .field-label { margin-top: var(--space-lg); }
++.method-note { margin-top: var(--space-lg); color: var(--color-muted); font-size: var(--text-sm); max-width: 45ch; }
++.additional-settings { grid-column: 1 / -1; border-top: 1px solid var(--color-rule); }
++.additional-settings > summary { min-height: 44px; padding-block: var(--space-sm); color: var(--color-ink-2); cursor: pointer; font-size: var(--text-sm); }
++.additional-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-lg); padding-top: var(--space-md); }
++.setup-actions { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; position: sticky; bottom: 0; z-index: var(--z-raised); padding-block: var(--space-sm); margin-top: var(--space-lg); background: var(--color-paper); border-top: 1px solid var(--color-rule); }
++.primary-button, .secondary-button { display: inline-flex; justify-content: center; align-items: center; gap: var(--space-xs); min-height: 48px; padding: var(--space-sm) var(--space-lg); border: 1px solid var(--color-control-rule); border-radius: var(--radius-control); font-size: var(--text-sm); font-weight: 700; }
++.primary-button { border-color: var(--color-action-ink); background: var(--color-action); color: var(--color-action-ink); }
++.primary-button:hover:not(:disabled) { background: var(--color-action-hover); }
++.secondary-button { color: var(--color-ink-2); background: var(--color-paper); }
++.secondary-button:hover:not(:disabled) { background: var(--color-paper-3); }
++.primary-button:active:not(:disabled), .secondary-button:active:not(:disabled) { transform: translateY(1px); }
++.primary-button:disabled, .secondary-button:disabled { color: var(--color-disabled); background: var(--color-disabled-fill); border-color: var(--color-control-rule); cursor: not-allowed; }
++.setup-footnote { min-height: 1lh; margin-top: var(--space-sm); font-size: var(--text-xs); color: var(--color-muted); }
++.settings-bottom { display: flex; align-items: center; padding-top: var(--space-md); margin-top: var(--space-lg); border-top: 1px solid var(--color-rule); font-size: var(--text-xs); color: var(--color-muted); }
++.learning-column { grid-area: learning; min-width: 0; padding-left: var(--space-columns); border-left: 1px solid var(--color-rule); }
++.course-heading { font-size: var(--text-md); margin-bottom: var(--space-lg); }
++.stage-track { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-lg); }
++.stage-track li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 var(--space-sm); align-items: center; min-width: 0; }
++.stage-number { grid-row: span 2; display: grid; place-items: center; width: 32px; height: 32px; color: var(--color-ink-2); background: var(--color-paper-3); border-radius: var(--radius-control); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
++.stage-track strong { color: var(--color-ink-2); font-size: var(--text-md); font-weight: 500; }
++.stage-track small { color: var(--color-muted); font-size: var(--text-sm); }
++.stage-track .active .stage-number { background: var(--color-accent); color: var(--color-accent-ink); }
++.stage-track .active strong { color: var(--color-accent); }
++.stage-track .complete .stage-number { color: var(--color-success); background: var(--color-success-soft); }
++.stage-track .skipped .stage-number, .stage-track .skipped strong { color: var(--color-muted); }
++.welcome-card { border-top: 1px solid var(--color-rule); margin-top: var(--space-lg); padding-top: var(--space-lg); }
++.welcome-card h3 { font-size: var(--text-md); margin-bottom: var(--space-sm); }
++.welcome-card p { font-size: var(--text-sm); color: var(--color-muted); }
++.learning-footnote { margin-top: var(--space-lg); font-size: var(--text-xs); color: var(--color-muted); }
++.guide-panel { display: none; }
++.mobile-guide { display: none; }
++
++#app[data-view]:not([data-view='setup']) .app-layout { grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: 'settings settings' 'learning guide'; }
++#app[data-view]:not([data-view='setup']) .page-intro { padding-block: var(--space-md); }
++#app[data-view]:not([data-view='setup']) .journey-heading h1 { font-size: var(--text-xl); }
++#app[data-view]:not([data-view='setup']) .journey-heading p { font-size: var(--text-sm); }
++#app[data-view]:not([data-view='setup']) .course-heading { margin-bottom: var(--space-sm); font-size: var(--text-sm); }
++#app[data-view]:not([data-view='setup']) .settings-panel:not(:has(#settings-details[open])) { display: flex; align-items: center; gap: var(--space-lg); border-block: 1px solid var(--color-rule); }
++#app[data-view]:not([data-view='setup']) #settings-details { flex: 1; min-width: 0; }
++#app[data-view]:not([data-view='setup']) #settings-details > summary { border: none; padding-block: var(--space-sm); }
++#app[data-view]:not([data-view='setup']) .settings-panel:not(:has(#settings-details[open])) .settings-bottom { flex-shrink: 0; padding: 0; margin: 0; border: 0; }
++#app[data-view]:not([data-view='setup']) .learning-column { padding: 0; border: 0; }
++#app[data-view]:not([data-view='setup']) .stage-track { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-md); margin-bottom: var(--space-md); }
++#app[data-view]:not([data-view='setup']) .stage-track li { grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-xs); }
++#app[data-view]:not([data-view='setup']) .stage-track small { display: none; }
++#app[data-view]:not([data-view='setup']) .stage-track strong { font-size: var(--text-sm); }
++#app[data-view]:not([data-view='setup']) .guide-panel { display: block; grid-area: guide; min-width: 0; position: sticky; top: var(--space-lg); padding-left: var(--space-columns); border-left: 1px solid var(--color-rule); }
++.session-progress { margin-bottom: var(--space-md); }
++.session-progress > div { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-xs); font-size: var(--text-sm); color: var(--color-muted); }
++.session-progress strong { font-weight: 500; font-variant-numeric: tabular-nums; }
++progress { appearance: none; display: block; width: 100%; height: 4px; border: 0; background: var(--color-paper-3); color: var(--color-accent); }
++progress::-webkit-progress-bar { background: var(--color-paper-3); }
++progress::-webkit-progress-value { background: var(--color-accent); }
++progress::-moz-progress-bar { background: var(--color-accent); }
++.question-card { padding-top: var(--space-md); border-top: 1px solid var(--color-rule); }
++.question-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-md); }
++.difficulty-badge { color: var(--color-accent); font-size: var(--text-sm); font-weight: 700; }
++.question-nav { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2xs); }
++.question-dot { display: grid; place-items: center; min-width: 44px; height: 44px; padding: var(--space-xs); border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; color: var(--color-ink-2); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
++.question-dot:hover { background: var(--color-paper-3); }
++.question-dot:active { transform: translateY(1px); }
++.question-dot.current { color: var(--color-accent); border-color: var(--color-accent); }
++.question-dot.solved { color: var(--color-success); background: var(--color-success-soft); }
++.question-dot:disabled { color: var(--color-disabled); background: var(--color-disabled-fill); cursor: not-allowed; }
++.question-title { font-size: var(--text-xl); line-height: 1.8; max-width: 48ch; white-space: pre-wrap; }
++.question-visual { background: var(--color-paper-2); padding: var(--space-md); margin-block: var(--space-md); }
++.visual-heading { color: var(--color-ink-2); font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-xs); }
++.concept-items { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--space-md); }
++.concept-item { padding: var(--space-xs) var(--space-md); max-width: 100%; min-width: 0; overflow-x: auto; font-size: var(--text-lg); }
++.concept-item + .concept-item { border-left: 1px solid var(--color-rule); }
++.visual-note { color: var(--color-muted); font-size: var(--text-sm); text-align: center; margin-top: var(--space-xs); }
++.question-visual svg { width: 100%; height: auto; max-height: 260px; }
++.question-visual svg text { font-family: var(--font-body); font-size: 14px; fill: var(--color-ink-2); }
++.chart-axis, .chart-tick { stroke: var(--color-muted); stroke-width: 1.5; }
++.chart-grid { stroke: var(--color-rule); stroke-width: 1; }
++.chart-line { stroke: var(--color-accent); stroke-width: 3; }
++.chart-point { fill: var(--color-action); stroke: var(--color-ink-2); stroke-width: 2; }
++.chart-bar { fill: var(--color-accent); }
++.choice-instruction { color: var(--color-muted); font-size: var(--text-sm); margin-bottom: var(--space-md); }
++.answer-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); }
++.answer-option { display: flex; align-items: center; gap: var(--space-sm); width: 100%; min-width: 0; min-height: 52px; text-align: left; border: 1px solid var(--color-control-rule); border-radius: var(--radius-control); background: var(--color-paper); color: var(--color-ink); padding: var(--space-sm) var(--space-md); }
++.answer-option:last-child { grid-column: 1 / -1; }
++.answer-option:hover:not(:disabled) { background: var(--color-accent-soft); }
++.answer-option:active:not(:disabled) { transform: translateY(1px); }
++.answer-option:disabled { cursor: not-allowed; color: var(--color-disabled); background: var(--color-disabled-fill); }
++.option-number { flex-shrink: 0; min-width: 24px; color: var(--color-muted); font-size: var(--text-sm); font-weight: 700; font-variant-numeric: tabular-nums; }
++.option-copy { flex: 1; min-width: 0; font-size: var(--text-md); line-height: 1.7; white-space: nowrap; overflow-x: auto; }
++.option-state { margin-left: auto; flex-shrink: 0; font-size: var(--text-xs); }
++.answer-option.is-wrong { border-color: var(--color-error); background: var(--color-error-soft); color: var(--color-error); }
++.answer-option.is-correct { border-color: var(--color-success); background: var(--color-success-soft); color: var(--color-success); }
++.is-correct .option-number { color: var(--color-success); }
++.is-wrong .option-number { color: var(--color-error); }
++.answer-feedback { padding: var(--space-lg); margin-top: var(--space-lg); }
++.answer-feedback h3 { line-height: 1.65; max-width: 50ch; }
++.answer-feedback p { margin-top: var(--space-xs); font-size: var(--text-md); line-height: 1.85; white-space: pre-wrap; overflow-wrap: break-word; }
++.answer-feedback small { display: block; margin-top: var(--space-sm); font-size: var(--text-sm); }
++.feedback-hint { background: var(--color-hint-soft); color: var(--color-hint); }
++.feedback-success { background: var(--color-success-soft); color: var(--color-success); }
++.question-bottom { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-top: var(--space-lg); }
++.question-standard { padding-top: var(--space-lg); border-top: 1px solid var(--color-rule); margin-top: var(--space-lg); color: var(--color-muted); font-size: var(--text-xs); line-height: 1.7; }
++.guide-top h2 { font-size: var(--text-lg); }
++.guide-top p { font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-2xs); }
++.guide-context { font-size: var(--text-xs); color: var(--color-muted); padding-block: var(--space-md); border-bottom: 1px solid var(--color-rule); }
++.guide-log { display: flex; flex-direction: column; gap: var(--space-lg); max-height: 360px; min-height: 192px; padding-block: var(--space-lg); overflow-y: auto; scrollbar-width: thin; }
++.guide-bubble { font-size: var(--text-md); line-height: 1.85; color: var(--color-ink-2); white-space: pre-wrap; overflow-wrap: break-word; }
++.guide-bubble strong { font-weight: 500; }
++.guide-bubble p { margin-top: var(--space-sm); }
++.guide-user { background: var(--color-accent-soft); color: var(--color-ink); padding: var(--space-md); }
++.guide-thinking { color: var(--color-muted); font-size: var(--text-sm); }
++.guide-prompts { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin-bottom: var(--space-md); }
++.guide-prompt { min-height: 44px; padding: var(--space-xs) var(--space-sm); color: var(--color-ink-2); background: transparent; border: 1px solid var(--color-control-rule); border-radius: var(--radius-control); font-size: var(--text-sm); }
++.guide-prompt:hover:not(:disabled) { background: var(--color-paper-3); }
++.guide-prompt:active:not(:disabled) { transform: translateY(1px); }
++.guide-prompt:disabled { color: var(--color-disabled); background: var(--color-disabled-fill); cursor: not-allowed; }
++.guide-composer { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-sm); }
++.guide-composer textarea { min-height: 104px; max-height: 240px; font-size: var(--text-md); }
++.guide-composer button { align-self: flex-end; min-height: 44px; padding: var(--space-xs) var(--space-md); color: var(--color-accent); background: transparent; border: 1px solid var(--color-accent); border-radius: var(--radius-control); font-size: var(--text-sm); font-weight: 500; }
++.guide-composer button:hover:not(:disabled) { background: var(--color-paper-3); }
++.guide-composer button:active:not(:disabled) { transform: translateY(1px); }
++.guide-composer button:disabled { color: var(--color-disabled); background: var(--color-disabled-fill); border-color: var(--color-control-rule); cursor: not-allowed; }
++.guide-note { margin-top: var(--space-md); color: var(--color-muted); font-size: var(--text-xs); line-height: 1.8; }
++.summary-card { padding-block: var(--space-lg); border-top: 1px solid var(--color-rule); }
++.summary-card h2 { font-size: var(--text-xl); margin-bottom: var(--space-sm); }
++.summary-subtitle { font-size: var(--text-md); color: var(--color-ink-2); }
++.stats-heading { margin-top: var(--space-lg); }
++.summary-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding-block: var(--space-lg); margin-block: var(--space-sm) var(--space-lg); border-block: 1px solid var(--color-rule); }
++.summary-stats > div { padding-inline: var(--space-lg); border-left: 1px solid var(--color-rule); }
++.summary-stats > div:first-child { padding-left: 0; border-left: 0; }
++.summary-stats > div:last-child { padding-right: 0; }
++.summary-stats strong { display: block; font-size: var(--text-2xl); font-weight: 700; font-variant-numeric: tabular-nums; }
++.summary-stats span { display: block; font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-2xs); }
++.review-box { margin-block: var(--space-lg); }
++.review-box h3 { margin-bottom: var(--space-sm); }
++.concept-tags { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
++.concept-tags span { font-size: var(--text-sm); color: var(--color-ink-2); }
++.concept-tags span + span { border-left: 1px solid var(--color-rule); padding-left: var(--space-sm); }
++.completion-total, .next-stage-note { font-size: var(--text-md); color: var(--color-ink-2); margin-block: var(--space-lg); }
++.summary-card > .text-button { margin-left: var(--space-xs); }
++.loading-card { padding-block: var(--space-xl); border-top: 1px solid var(--color-rule); }
++.loading-card h2 { margin-bottom: var(--space-md); }
++.loading-card p { font-size: var(--text-md); color: var(--color-muted); margin-bottom: var(--space-lg); }
++.loading-indicator { width: 32px; height: 32px; border: 3px solid var(--color-paper-3); border-top-color: var(--color-accent); border-radius: var(--radius-pill); margin-bottom: var(--space-lg); animation: spin 1s linear infinite; }
++.skeleton-line { height: 24px; width: 88%; background: var(--color-paper-3); margin-bottom: var(--space-md); border-radius: var(--radius-control); }
++.skeleton-line.short { width: 64%; }
++.loading-card .text-button { margin-top: var(--space-md); }
++.error-notice, .inline-error { background: var(--color-error-soft); color: var(--color-error); padding: var(--space-md); font-size: var(--text-md); line-height: 1.7; overflow-wrap: break-word; }
++.error-notice { margin-bottom: var(--space-lg); }
++.inline-error { margin-top: var(--space-md); }
++.guide-error { margin-bottom: var(--space-md); }
++.katex { font-size: 1.1em; white-space: normal; overflow-wrap: normal; }
++.katex .katex-mathml { inset-inline-start: -10000px; }
++.katex-display { max-width: 100%; padding-block: var(--space-2xs); margin-block: var(--space-md); overflow-x: auto; overflow-y: clip; }
++.site-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); padding-block: var(--space-lg); border-top: 1px solid var(--color-rule); color: var(--color-muted); font-size: var(--text-xs); }
++.site-footer button { min-height: 44px; padding: var(--space-xs); color: var(--color-ink-2); background: transparent; border: 1px solid transparent; border-radius: var(--radius-control); font-size: var(--text-xs); }
++.site-footer button:hover { background: var(--color-paper-3); }
++.site-footer button:active { transform: translateY(1px); }
++dialog { position: fixed; inset: 0; margin: auto; width: min(560px, calc(100% - var(--space-columns))); max-height: min(80dvh, 46rem); overflow-y: auto; padding: var(--space-columns); border: 1px solid var(--color-control-rule); border-radius: var(--radius-card); background: var(--color-paper); color: var(--color-ink); }
++dialog::backdrop { background: var(--color-backdrop); }
++.close-dialog { position: absolute; right: var(--space-sm); top: var(--space-sm); width: 44px; height: 44px; padding: 0; border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; color: var(--color-ink-2); font-size: var(--text-xl); }
++.close-dialog:hover { background: var(--color-paper-3); }
++.close-dialog:active { transform: translateY(1px); }
++dialog h2 { margin-top: var(--space-md); padding-right: var(--space-lg); margin-bottom: var(--space-lg); }
++dialog ol { padding-left: var(--space-lg); font-size: var(--text-md); line-height: 1.8; }
++dialog li + li { margin-top: var(--space-md); }
++.local-help { padding-top: var(--space-lg); border-top: 1px solid var(--color-rule); margin-top: var(--space-lg); }
++.local-help h3 { margin-bottom: var(--space-sm); }
++.local-help p { margin-top: var(--space-sm); font-size: var(--text-sm); color: var(--color-ink-2); }
++code { font-family: var(--font-outlier); font-size: .95em; overflow-wrap: break-word; }
++.no-script { max-width: var(--container); margin-inline: auto; padding: var(--space-2xl) var(--gutter); }
++.no-script p { margin-top: var(--space-lg); }
++@keyframes spin { to { transform: rotate(360deg); } }
++@media (max-width: 75rem) {
++  .app-layout { grid-template-columns: minmax(0, 1fr) 240px; }
++  #settings-fields { grid-template-columns: minmax(0, 1fr); }
++  .settings-method { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-xs) var(--space-md); padding: var(--space-lg) 0 0; border-left: 0; border-top: 1px solid var(--color-rule); }
++  .settings-method h2 { grid-column: 1 / -1; margin-bottom: var(--space-md); }
++  .settings-method .field-label { margin: 0; }
++  .settings-method #difficulty { grid-column: 1; grid-row: 3; }
++  .settings-method #question-count { grid-column: 2; grid-row: 3; }
++  .method-note { grid-column: 1 / -1; margin-top: var(--space-sm); }
++  #app[data-view]:not([data-view='setup']) .app-layout { grid-template-columns: minmax(0, 1fr) 288px; }
++}
++@media (max-width: 60rem) {
++  .header-description { display: none; }
++  .app-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'settings' 'learning'; }
++  .learning-column { border-left: 0; padding-left: 0; border-top: 1px solid var(--color-rule); padding-top: var(--space-lg); }
++  .stage-track { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-sm); }
++  .stage-track li { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: var(--space-xs); }
++  .stage-track small { display: none; }
++  .welcome-card { max-width: 65ch; }
++  #app[data-view]:not([data-view='setup']) .app-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'settings' 'learning' 'guide'; }
++  #app[data-view]:not([data-view='setup']) .guide-panel { position: static; border-left: 0; padding-left: 0; border-top: 1px solid var(--color-rule); padding-top: var(--space-lg); }
++  .mobile-guide { display: block; margin-top: var(--space-md); border-block: 1px solid var(--color-rule); }
++  .mobile-guide > summary { min-height: 48px; padding-block: var(--space-sm); color: var(--color-ink-2); cursor: pointer; font-size: var(--text-sm); }
++  #app[data-view]:not([data-view='setup']) .mobile-guide .guide-panel { border: 0; padding-block: var(--space-md); }
++  .guide-log { min-height: 0; max-height: 320px; }
++  #app[data-view]:not([data-view='setup']) .settings-panel:not(:has(#settings-details[open])) { flex-wrap: wrap; gap: 0; }
++  #app[data-view]:not([data-view='setup']) .settings-panel:not(:has(#settings-details[open])) .settings-bottom { padding-block: var(--space-sm); }
++  .site-footer { align-items: flex-start; flex-direction: column; gap: var(--space-xs); }
++}
++@media (max-width: 40rem) {
++  .site-header { min-height: 72px; gap: var(--space-xs); }
++  .wordmark { font-size: var(--text-lg); }
++  .header-actions { gap: var(--space-xs); }
++  .audience-badge { max-width: 96px; font-size: var(--text-xs); line-height: 1.5; }
++  .icon-button { padding-inline: var(--space-xs); font-size: var(--text-xs); }
++  .page-intro { align-items: flex-start; flex-direction: column; padding-block: var(--space-lg); gap: var(--space-xs); }
++  .journey-heading h1 { font-size: var(--text-xl); }
++  .journey-heading p { font-size: var(--text-sm); }
++  #settings-summary-info { display: none; }
++  .field-pair, .additional-fields { grid-template-columns: minmax(0, 1fr); }
++  .settings-method { grid-template-columns: minmax(0, 1fr); }
++  .settings-method #difficulty, .settings-method #question-count { grid-column: auto; grid-row: auto; }
++  .settings-method select + .field-label { margin-top: var(--space-md); }
++  .setup-actions { gap: var(--space-xs); }
++  .primary-button, .secondary-button { padding-inline: var(--space-md); }
++  #app[data-view]:not([data-view='setup']) .stage-track { gap: var(--space-xs); }
++  #app[data-view]:not([data-view='setup']) .stage-track li { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: var(--space-xs); }
++  .stage-track strong { font-size: var(--text-sm); }
++  .question-top { flex-wrap: wrap; }
++  .question-title { font-size: var(--text-lg); }
++  .question-nav { gap: 0; }
++  .question-visual { padding: var(--space-md); }
++  .concept-item { padding: var(--space-xs); font-size: var(--text-md); }
++  .answer-options { grid-template-columns: minmax(0, 1fr); }
++  .answer-feedback { padding: var(--space-md); }
++  .question-bottom { gap: var(--space-xs); }
++  .summary-stats > div { padding-inline: var(--space-sm); }
++  .summary-stats strong { font-size: var(--text-xl); }
++  .summary-stats span { font-size: var(--text-xs); }
++  .summary-card > .text-button { display: block; margin: var(--space-sm) 0 0; }
++  dialog { padding: var(--space-lg); }
++}
++@media (pointer: coarse) { button, select, summary { min-height: 48px; } .answer-option { min-height: 64px; } }
+ @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+--- before/src/visuals.js
++++ after/src/visuals.js
+@@ -11,16 +11,16 @@
+ export function renderVisual(visual) {
+   const figure = document.createElement('figure')
+   figure.className = `question-visual visual-${visual.type}`
+-  const heading = document.createElement('div')
++  const heading = document.createElement('figcaption')
+   heading.className = 'visual-heading'
+   heading.textContent = visual.title || '문제 살펴보기'
+   figure.append(heading)
+   if (visual.type === 'concept') {
+     const cards = document.createElement('div')
+-    cards.className = 'concept-cards'
++    cards.className = 'concept-items'
+     visual.items.forEach((item) => {
+       const card = document.createElement('div')
+-      card.className = 'concept-card'
++      card.className = 'concept-item'
+       renderMessage(card, item.label)
+       cards.append(card)
+     })
+@@ -32,7 +32,8 @@
+     else drawCoordinates(svg, visual.items)
+     figure.append(svg)
+   }
+-  const caption = document.createElement('figcaption')
++  const caption = document.createElement('p')
++  caption.className = 'visual-note'
+   renderMessage(caption, visual.caption)
+   figure.append(caption)
+   return figure

@@ -1,226 +1,534 @@
+import 'katex/dist/katex.min.css'
 import './style.css'
-import { MODEL, requestResponse } from './openai.js'
+import { UNITS, STAGES, SOURCES } from './curriculum.js'
+import { MODEL } from './openai.js'
+import { generateQuiz, askGuide } from './quiz-api.js'
+import { validateSettings, createProgress, answerQuestion, stageComplete, summarize, safeGuidance } from './quiz.js'
+import { demoQuiz, DEMO_SETTINGS } from './demo.js'
+import { renderMessage } from './render-message.js'
+import { renderVisual } from './visuals.js'
+import { createQuestionHistory } from './question-history.js'
+import { createGuideLayout } from './guide-layout.js'
+import { createLearningEffects } from './learning-effects.js'
 
-// VITE_ 환경 변수는 브라우저에 노출됩니다. 로컬 교육 실습 전용입니다.
 const apiKey = (import.meta.env.VITE_OPENAI_API_KEY ?? '').trim()
-const sparkle = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 2 2.7 7.3L22 12l-7.3 2.7L12 22l-2.7-7.3L2 12l7.3-2.7L12 2Z" fill="currentColor"/></svg>'
-const arrow = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-const resetIcon = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 7M4 4v6h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+let historyStorage
+try { historyStorage = window.localStorage } catch { /* 저장소가 차단되면 현재 방문 동안만 이력을 유지합니다. */ }
+const questionHistory = createQuestionHistory(historyStorage)
+const $ = (selector) => document.querySelector(selector)
+const node = (tag, className = '', text) => {
+  const element = document.createElement(tag)
+  element.className = className
+  if (text !== undefined) element.textContent = text
+  return element
+}
+const rich = (tag, className, text) => {
+  const element = node(tag, className)
+  renderMessage(element, text)
+  return element
+}
+const action = (text, className, callback) => {
+  const button = node('button', className, text)
+  button.type = 'button'
+  button.addEventListener('click', callback)
+  return button
+}
+let session = null
+let generationController = null
+let guideController = null
+let pendingGuideThread = null
+let generationError = ''
+let pendingStage = 0
+let showingSummary = false
 
-document.querySelector('#app').innerHTML = `
+$('#app').innerHTML = `
   <header class="site-header">
-    <a class="wordmark" href="./" aria-label="팝챗 처음 화면">pop<span class="logo-star">✳</span><span class="wordmark-sub">chat</span><span class="logo-period">.</span></a>
-    <span class="header-caption">작은 질문에서 시작하는, 커다란 아이디어.</span>
-    <button class="help-button" id="open-guide" type="button"><span aria-hidden="true">?</span> 시작 가이드</button>
+    <a href="./" class="wordmark" aria-label="퀴즈팝 처음 화면"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" class="logo-surface"/><path d="M16 7v18M7 16h18M9.6 9.6l12.8 12.8M9.6 22.4 22.4 9.6" class="logo-strokes"/></svg>퀴즈팝</a>
+    <span class="header-description">한 문제씩, 나의 속도로.</span>
+    <div class="header-actions"><button class="icon-button" id="help-button" type="button">사용 방법</button></div>
   </header>
-  <main class="workspace">
-    <aside class="intro-panel" aria-label="팝챗 소개">
-      <div class="eyebrow"><span class="tiny-dot"></span> YOUR EVERYDAY AI PLAYGROUND</div>
-      <h1>궁금한 건,<br>일단 <span class="headline-pop">톡<span class="headline-dot">.</span></span></h1>
-      <p class="intro-copy">공부부터 엉뚱한 상상까지.<br>생각을 톡 던지면, 아이디어가 팝!</p>
-      <div class="illustration" aria-hidden="true">
-        <span class="sticker sticker-hey">SAY HELLO!</span>
-        <svg class="mascot" viewBox="0 0 300 210" fill="none">
-          <path d="m238 20 5 15 16 2-12 11 3 16-14-8-14 8 3-16-12-11 16-2 9-15Z" fill="#ff805c" stroke="#28242d" stroke-width="2.5"/>
-          <ellipse cx="152" cy="188" rx="100" ry="10" fill="#ded5ef"/>
-          <path d="M63 74C63 41 91 27 143 27h17c52 0 80 14 80 47v51c0 32-28 48-80 48h-12l-39 22 3-26c-32-7-49-21-49-44V74Z" fill="#baff50" stroke="#28242d" stroke-width="3"/>
-          <path d="M100 91c3-13 13-13 16 0m56 0c3-13 13-13 16 0" stroke="#28242d" stroke-width="6" stroke-linecap="round"/>
-          <path d="M126 111c8 18 29 18 38 0" stroke="#28242d" stroke-width="5" stroke-linecap="round"/>
-          <ellipse cx="97" cy="109" rx="11" ry="6" fill="#f99bba"/><ellipse cx="191" cy="109" rx="11" ry="6" fill="#f99bba"/>
-          <path d="m43 115-12-8m11 26-17 3m218-47 15-7m-13 25 19 4" stroke="#28242d" stroke-width="3" stroke-linecap="round"/>
-          <path d="m60 25 3 11 11 3-11 4-3 11-4-11-11-4 11-3 4-11Z" fill="#8252ee"/>
-        </svg>
-        <span class="sticker sticker-idea">100% YOUR CURIOSITY</span>
-      </div>
-      <div class="how-it-works">
-        <p class="small-label">대화는 이렇게</p>
-        <p><span class="step-number">01</span> 떠오른 질문을 자유롭게 보내기</p>
-        <p><span class="step-number">02</span> 답변에 이어서 더 깊이 물어보기</p>
-        <p><span class="step-number">03</span> 새 주제는 대화 초기화로 시작!</p>
-      </div>
-      <div class="local-note"><span class="local-symbol" aria-hidden="true">↗</span><div><strong>지금은 로컬 실습 중</strong><p>브라우저에서 OpenAI API로 직접 연결해요.</p></div></div>
-    </aside>
-    <section class="chat-panel" aria-label="AI와 대화">
-      <header class="chat-header">
-        <div class="chat-identity"><span class="bot-icon">${sparkle}</span><div><h2>나의 아이디어 메이트</h2><p>POWERED BY OPENAI <span>·</span> <span id="model-name"></span></p></div></div>
-        <button class="reset-button" id="reset-chat" type="button" aria-label="대화 초기화">${resetIcon}<span>대화 초기화</span></button>
-      </header>
-      <div class="connection-bar"><div class="api-status" id="api-status" role="status" aria-live="polite"><span class="status-dot"></span><span id="status-label"></span></div><span id="status-description"></span></div>
-      <div class="chat-scroll" id="chat-scroll">
-        <div class="welcome" id="welcome">
-          <div class="welcome-emblem" aria-hidden="true"><span class="emblem-spark">✳</span><span class="emblem-orbit">✦</span><span class="emblem-bubble">hi!</span></div>
-          <span class="welcome-tag">BIG IDEAS START WITH A LITTLE CHAT</span>
-          <h2>안녕! 어떤 생각을 하고 있어?</h2>
-          <p>정답이 필요한 순간도, 그냥 수다 떨고 싶은 순간도.<br>뭐든 좋아. 우리 이야기해 보자!</p>
-          <div class="suggestions" aria-label="질문 아이디어">
-            <button class="suggestion suggestion-study" type="button" data-prompt="어려운 개념을 쉽게 이해하는 공부 방법 3가지를 알려줘."><span class="suggestion-icon" aria-hidden="true">✎</span><strong>공부도 가볍게</strong><span>어려운 개념, 쉽게 풀어줘</span><span class="suggestion-arrow" aria-hidden="true">↗</span></button>
-            <button class="suggestion suggestion-idea" type="button" data-prompt="친구들과 함께 만들 수 있는 재밌는 앱 아이디어 3가지를 제안해 줘."><span class="suggestion-icon" aria-hidden="true">✧</span><strong>아이디어가 필요해</strong><span>새로운 영감을 톡!</span><span class="suggestion-arrow" aria-hidden="true">↗</span></button>
-            <button class="suggestion suggestion-fun" type="button" data-prompt="만약 고양이가 학교 선생님이라면? 짧고 재밌는 이야기를 만들어 줘."><span class="suggestion-icon" aria-hidden="true">☺</span><strong>그냥 재밌는 얘기</strong><span>엉뚱한 상상도 환영해</span><span class="suggestion-arrow" aria-hidden="true">↗</span></button>
-          </div>
-        </div>
-        <div class="messages" id="messages" role="log" aria-label="대화 내용" aria-live="polite" aria-relevant="additions"></div>
-        <div class="loading-message" id="loading" role="status" hidden><span class="mini-bot">${sparkle}</span><span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>팝챗이 생각을 모으는 중…</span></div>
-      </div>
-      <div class="composer-area">
-        <div class="error-notice" id="error-notice" role="alert" hidden></div>
-        <div class="composer-tip"><span aria-hidden="true">✧</span><span id="composer-tip">작은 질문도 좋아요. 편하게 시작해 보세요.</span></div>
-        <form id="chat-form">
-          <label class="sr-only" for="message-input">메시지 입력</label>
-          <div class="composer"><textarea id="message-input" name="message" rows="1" maxlength="6000" placeholder="생각나는 건 뭐든 물어봐…" aria-describedby="input-hint"></textarea><button class="send-button" id="send-button" type="submit" disabled><span id="send-label">보내기</span>${arrow}</button></div>
-          <div class="composer-meta"><span id="input-hint">Enter 전송 <span aria-hidden="true">·</span> Shift + Enter 줄바꿈</span><span><span id="character-count">0</span> / 6,000</span></div>
+  <div class="page-intro">
+    <div class="journey-heading"><h1 id="journey-title">오늘의 수학 퀴즈</h1><p id="journey-description">배울 단원과 성취기준을 고르고, 나의 속도로 풀어 보세요.</p></div>
+    <span class="session-chip" id="session-chip" role="status">학습 준비</span>
+  </div>
+  <main class="app-layout">
+    <aside class="settings-panel">
+      <details id="settings-details" open>
+        <summary><span class="settings-summary-title">학습 설정</span><span id="settings-summary-info">단원과 성취기준을 선택해요.</span><span class="details-chevron" aria-hidden="true">⌄</span></summary>
+        <form id="settings-form">
+
+          <p id="setup-error" class="inline-error" role="alert" hidden></p>
+          <fieldset id="settings-fields">
+            <section class="settings-content" aria-labelledby="content-heading">
+              <h2 id="content-heading">무엇을 배울까요?</h2>
+              <div class="field-pair"><div><label class="field-label" for="course">과목</label><select id="course" name="course"><option>공통수학1</option><option>공통수학2</option></select></div><div><label class="field-label" for="unit">단원</label><select id="unit" name="unit"></select></div></div>
+              <label id="custom-unit-label" class="field-label" for="custom-unit" hidden>단원명 직접 입력</label><input id="custom-unit" autocomplete="off" maxlength="100" placeholder="예: 이차함수의 최댓값과 최솟값" hidden>
+              <div class="label-row"><span class="field-label">성취기준</span><span class="tiny-label">여러 개 선택 가능</span></div>
+              <div id="standards" class="standards-list" role="group" aria-label="성취기준 선택"></div>
+              <p class="source-note">선택 문구는 원문의 요약입니다. <a id="standards-source" target="_blank" rel="noopener noreferrer">교육청 자료</a></p>
+            </section>
+            <section class="settings-method" aria-labelledby="method-heading">
+              <h2 id="method-heading">어떻게 시작할까요?</h2>
+              <label class="field-label" for="difficulty">시작 난이도</label><select id="difficulty" ></select>
+              <label class="field-label" for="question-count">단계당 문항 수</label><select id="question-count" ><option value="3">3문항</option><option value="5">5문항</option><option value="7">7문항</option></select>
+              <p class="method-note">한 단계의 문제를 모두 풀면 다음 난이도로 이어져요.</p>
+            </section>
+            <details class="additional-settings"><summary>학습 범위와 성취기준 직접 입력</summary><div class="additional-fields"><div><label class="field-label" for="range">학습 범위 <span>선택</span></label><textarea id="range" rows="2" maxlength="700" placeholder="예: 교과서 20~35쪽, 다항식의 덧셈과 곱셈"></textarea></div><div><label class="field-label" for="custom-standards">성취기준 직접 입력 <span>선택</span></label><textarea id="custom-standards" rows="2" maxlength="1500" placeholder="학교에서 사용하는 기준을 한 줄에 하나씩 입력하세요."></textarea></div></div></details>
+          </fieldset>
+          <div class="setup-actions"><button class="primary-button start-button" id="start-button" type="submit">퀴즈 만들기</button><button class="secondary-button reset-settings" id="reset-button" type="button" hidden>설정 바꾸고 새로 시작</button><button class="text-button demo-button" id="demo-button" type="button">예시 퀴즈 체험</button></div>
+
+
+          <p class="setup-footnote" id="setup-footnote">선택한 단계부터 최상위까지 차근차근 이어져요.</p>
         </form>
-        <p class="ai-disclaimer">AI의 답변은 틀릴 수 있어요. 중요한 내용은 한 번 더 확인해 주세요.</p>
-      </div>
+      </details>
+      <div class="settings-bottom"><span id="connection-dot" hidden></span><span id="connection-label" role="status"></span></div>
+    </aside>
+    <section class="learning-column" aria-label="퀴즈 학습">
+      <h2 class="course-heading">나의 학습 단계</h2>
+      <ol class="stage-track" id="stage-track" aria-label="난이도 학습 단계"></ol>
+      <div id="session-progress" class="session-progress" hidden><div><span id="progress-label"></span><strong id="progress-value"></strong></div><progress id="total-progress" max="100" value="0" aria-label="전체 학습 진행률"></progress></div>
+      <div id="quiz-workspace" aria-live="polite"></div>
+      <p class="learning-footnote">틀려도 괜찮아요. 힌트와 질문으로 다시 생각하면, 그것도 배움이에요.</p>
     </section>
+    <aside class="guide-panel" aria-labelledby="guide-heading">
+      <div class="guide-top"><h2 id="guide-heading">생각 길잡이</h2><p>답 대신, 다음 한 걸음.</p></div>
+      <div class="guide-context" id="guide-context">퀴즈를 시작하면 함께할게요.</div>
+      <div class="guide-log" id="guide-log" role="log" aria-live="polite" aria-label="생각 길잡이 대화"></div>
+      <div class="guide-prompts" id="guide-prompts"></div>
+      <p class="inline-error guide-error" id="guide-error" role="alert" hidden></p>
+      <form id="guide-form"><label class="field-label" for="guide-input">모르는 부분 질문하기</label><div class="guide-composer"><textarea id="guide-input" rows="3" maxlength="1200" placeholder="어떤 부분이 헷갈리나요?" disabled></textarea><button id="guide-send" type="submit" disabled>질문 보내기</button></div></form>
+      <p class="guide-note">정답·보기 번호를 알려주지 않아요.<br>개념을 함께 짚으며 스스로 풀도록 도와요.</p>
+    </aside>
   </main>
-  <footer class="site-footer"><span>STAY CURIOUS. KEEP POPPING. ${sparkle}</span><p>교육용 로컬 실습 · 브라우저 환경 변수는 API 키를 숨기지 못해요. <strong>실제 키가 포함된 빌드 결과물을 공개 배포하지 마세요.</strong></p></footer>
-  <dialog id="setup-dialog" aria-labelledby="guide-title">
-    <div class="dialog-heading"><span class="guide-tag">LET’S GET STARTED</span><button id="close-guide" class="close-guide" type="button" aria-label="시작 가이드 닫기">×</button></div>
-    <h2 id="guide-title">첫 대화까지, 딱 세 단계.</h2>
-    <ol class="guide-steps"><li>프로젝트 루트의 <code>.env.local</code>을 열어 주세요.</li><li><code>VITE_OPENAI_API_KEY=</code> 뒤에 본인의 API 키를 입력하고 저장해 주세요.</li><li>터미널에서 <kbd>Ctrl + C</kbd>로 개발 서버를 종료하고 <code>npm run dev</code>로 다시 실행해 주세요.</li></ol>
-    <p class="guide-status">키를 입력한 뒤에도 첫 요청 전까지는 ‘연결 미확인’이에요. 실제 Responses API 요청이 완료되어야 ‘요청 성공’으로 바뀝니다.</p>
-    <p class="guide-warning">교육용 로컬 실습입니다. <code>VITE_</code> 환경 변수는 브라우저와 빌드 파일에 노출됩니다. <strong>실제 키가 포함된 결과물은 공개 배포하지 마세요.</strong></p>
-    <a class="docs-link" href="https://developers.openai.com/api/docs/guides/text" target="_blank" rel="noopener noreferrer">OpenAI 공식 문서 읽기 ↗</a>
-  </dialog>
+  <footer class="site-footer"><span>퀴즈팝</span><p>AI 문항은 오류가 있을 수 있어요. 수업 활용 전 확인해 주세요. <button id="local-help" type="button">로컬 실습 안내</button></p></footer>
+  <dialog id="help-dialog" aria-labelledby="help-title"><button class="close-dialog" id="close-help" type="button" aria-label="안내 닫기">×</button><h2 id="help-title">퀴즈팝 사용 방법</h2><ol><li>단원 또는 범위와 성취기준을 선택해요.</li><li>시작 난이도와 문항 수를 정하고 퀴즈를 만들어요.</li><li>보기의 번호나 내용을 누르면 바로 채점돼요. 키보드 숫자 1~5도 사용할 수 있어요.</li><li>오답이면 힌트를 보고 다른 답을 골라요. 모르는 것은 생각 길잡이에게 물어보세요.</li><li>한 단계의 모든 문제를 맞히면 결과를 확인하고 다음 단계로 올라가요.</li></ol><div class="local-help"><h3>로컬 API 설정</h3><p>프로젝트의 <code>.env.local</code>에 <code>VITE_OPENAI_API_KEY=본인의키</code> 형식으로 설정하세요. 키가 없다면 예시 퀴즈를 먼저 체험할 수 있어요.</p><p>실제 키는 브라우저와 빌드 파일에 노출됩니다. 키가 포함된 빌드를 공개 배포하지 마세요. 새로고침하면 현재 진행만 초기화되고, 최근 출제 이력은 이 브라우저에 유지돼요.</p><p>출제 모델: <span class="model-label"></span></p></div></dialog>
 `
 
-const input = document.querySelector('#message-input')
-const form = document.querySelector('#chat-form')
-const sendButton = document.querySelector('#send-button')
-const sendLabel = document.querySelector('#send-label')
-const messages = document.querySelector('#messages')
-const welcome = document.querySelector('#welcome')
-const scrollArea = document.querySelector('#chat-scroll')
-const loading = document.querySelector('#loading')
-const errorNotice = document.querySelector('#error-notice')
-const status = document.querySelector('#api-status')
-const statusLabel = document.querySelector('#status-label')
-const statusDescription = document.querySelector('#status-description')
-const dialog = document.querySelector('#setup-dialog')
-const suggestions = [...document.querySelectorAll('.suggestion')]
-let conversation = []
-let activeRequest = null
-document.querySelector('#model-name').textContent = MODEL
+const guideLayout = createGuideLayout()
+const learningEffects = createLearningEffects()
+$('.model-label').textContent = MODEL
+STAGES.forEach((stage, i) => $('#difficulty').append(new Option(`${stage.name} (${stage.subtitle})`, i)))
 
-function setStatus(state, description) {
-  const labels = { missing: '키 미설정', unverified: '연결 미확인', loading: '요청 중', success: '요청 성공', error: '요청 실패' }
-  status.dataset.state = state
-  statusLabel.textContent = labels[state]
-  statusDescription.textContent = description
+function populateUnits() {
+  $('#unit').replaceChildren()
+  UNITS.filter((u) => u.course === $('#course').value).forEach((u) => $('#unit').append(new Option(u.name, u.id)))
+  $('#unit').append(new Option('단원 / 범위 직접 입력', 'custom'))
+  populateStandards()
 }
-function setInitialStatus() {
-  setStatus(apiKey ? 'unverified' : 'missing', apiKey ? '첫 메시지를 보내 연결을 확인해 보세요.' : '.env.local에 키를 입력하고 서버를 재시작해 주세요.')
-}
-function updateComposer() {
-  sendButton.disabled = Boolean(activeRequest) || !input.value.trim()
-  document.querySelector('#character-count').textContent = input.value.length.toLocaleString('en-US')
-  input.style.height = 'auto'
-  input.style.height = `${Math.min(input.scrollHeight, 144)}px`
-}
-function setLoading(isLoading) {
-  loading.hidden = !isLoading
-  messages.setAttribute('aria-busy', String(isLoading))
-  input.disabled = isLoading
-  sendLabel.textContent = isLoading ? '생각 중' : '보내기'
-  suggestions.forEach((button) => { button.disabled = isLoading })
-  updateComposer()
-}
-function showError(message) {
-  errorNotice.textContent = message
-  errorNotice.hidden = false
-}
-function scrollToLatest() {
-  scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: 'smooth' })
-}
-function addMessage(role, text) {
-  const row = document.createElement('article')
-  row.className = `message message-${role}`
-  const label = document.createElement('span')
-  label.className = 'message-label'
-  label.textContent = role === 'user' ? '나' : 'POP CHAT'
-  const bubble = document.createElement('div')
-  bubble.className = 'message-bubble'
-  // 사용자와 모델 출력 모두 텍스트로 렌더링해 HTML 실행을 막습니다.
-  bubble.textContent = text
-  row.append(label, bubble)
-  messages.append(row)
-  return row
-}
-
-form.addEventListener('submit', async (event) => {
-  event.preventDefault()
-  const text = input.value.trim()
-  if (!text || activeRequest) return
-  errorNotice.hidden = true
-  if (!apiKey) {
-    setInitialStatus()
-    showError('API 키가 아직 없어요. 시작 가이드에 따라 .env.local의 VITE_OPENAI_API_KEY를 입력한 뒤 개발 서버를 재시작해 주세요.')
-    return
+function populateStandards() {
+  const unit = UNITS.find((u) => u.id === $('#unit').value)
+  $('#standards').replaceChildren()
+  for (const [index, [id, text]] of (unit?.standards ?? []).entries()) {
+    const label = node('label', 'standard-option')
+    const input = node('input')
+    input.type = 'checkbox'
+    input.value = id
+    input.checked = index === 0
+    input.dataset.text = text
+    const copy = node('span')
+    copy.append(node('small', 'standard-code', id), node('span', '', text))
+    label.append(input, copy)
+    $('#standards').append(label)
   }
+  const custom = !unit
+  $('#custom-unit').hidden = !custom
+  $('#custom-unit-label').hidden = !custom
+  if (custom) $('.additional-settings').open = true
+  $('#standards').hidden = custom
+  $('#custom-standards').placeholder = custom ? '성취기준이나 학습목표를 반드시 입력해 주세요.' : '추가할 성취기준을 한 줄에 하나씩 입력하세요.'
+  $('#standards-source').href = $('#course').value === '공통수학1' ? SOURCES.common1 : SOURCES.common2
+}
+function readSettings() {
+  const unit = UNITS.find((u) => u.id === $('#unit').value)
+  const standards = [...document.querySelectorAll('#standards input:checked')].map((input) => ({ id: input.value, text: input.dataset.text }))
+  $('#custom-standards').value.split('\n').map((s) => s.trim()).filter(Boolean).forEach((text, i) => standards.push({ id: `custom-${i + 1}`, text }))
+  return validateSettings({ course: $('#course').value, unit: unit?.name ?? $('#custom-unit').value.trim(), range: $('#range').value.trim(), standards, count: Number($('#question-count').value), startStage: Number($('#difficulty').value) })
+}
+function setConnection(state, text) {
+  $('#connection-dot').dataset.state = state
+  $('#connection-label').textContent = text
+}
+function setupLock() {
+  const active = Boolean(session)
+  $('#settings-fields').disabled = active
+  $('#settings-summary-info').textContent = active ? `${session.settings.course} / ${session.settings.unit || '직접 입력한 범위'} / ${session.settings.count}문항씩` : '단원과 성취기준을 선택해요.'
+  $('#start-button').hidden = active
+  $('#reset-button').hidden = !active
+  $('#demo-button').hidden = active
+  $('#setup-footnote').textContent = active ? '설정을 바꾸려면 새로 시작을 눌러 주세요.' : '선택한 단계부터 최상위까지 차근차근 이어져요.'
+}
+function currentQuestion() { return session?.questions[session.questionIndex] }
+function currentProgress() { return session?.progress[session.questionIndex] }
+function abortGuide() {
+  guideController?.abort()
+  guideController = null
+  if (pendingGuideThread?.at(-1)?.role === 'user') pendingGuideThread.pop()
+  pendingGuideThread = null
+  $('#guide-log').setAttribute('aria-busy', 'false')
+}
+function focusContent(selector, block = 'start') {
+  const element = $(selector)
+  if (!element) return
+  element.tabIndex = -1
+  element.focus({ preventScroll: true })
+  element.scrollIntoView?.({ block, behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+}
+function resetSession() {
+  learningEffects.clear()
+  generationController?.abort()
+  generationController = null
+  abortGuide()
+  session = null
+  showingSummary = false
+  generationError = ''
+  $('#setup-error').hidden = true
+  $('#guide-error').hidden = true
+  $('#guide-input').value = ''
+  $('#settings-details').open = true
+  setConnection(apiKey ? 'ready' : 'missing', apiKey ? 'API 키 설정됨' : '예시 퀴즈 체험 가능')
+  setupLock()
+  renderAll()
+}
+function begin(settings, mode) {
+  learningEffects.clear()
+  abortGuide()
+  session = { settings, mode, stage: settings.startStage, questions: [], progress: [], questionIndex: 0, history: [], threads: [], previous: [] }
+  showingSummary = false
+  $('#setup-error').hidden = true
+  setupLock()
+  $('#settings-details').open = false
+  void loadStage(settings.startStage)
+}
+async function loadStage(stage) {
+  if (!session || generationController) return
+  abortGuide()
+  const target = session
   const controller = new AbortController()
-  activeRequest = controller
-  const pendingInput = [...conversation, { role: 'user', content: text }]
-  welcome.hidden = true
-  const userRow = addMessage('user', text)
-  input.value = ''
-  setLoading(true)
-  setStatus('loading', 'Responses API에서 답변을 기다리고 있어요.')
-  scrollToLatest()
+  generationController = controller
+  pendingStage = stage
+  generationError = ''
+  renderAll()
+  setConnection('loading', '맞춤 문항 생성 중')
   try {
-    const reply = await requestResponse({ apiKey, input: pendingInput, signal: controller.signal })
-    if (activeRequest !== controller) return
-    conversation = [...pendingInput, ...reply.messages]
-    addMessage('assistant', reply.text)
-    setStatus('success', '실제 Responses API 요청이 완료되었어요.')
-    document.querySelector('#composer-tip').textContent = '앞서 나눈 이야기를 기억해요. 이어서 물어보세요.'
+    const previous = [...new Set([...questionHistory.get(target.settings), ...target.previous])]
+    const quiz = target.mode === 'demo'
+      ? demoQuiz(stage, { previous, randomize: true })
+      : await generateQuiz({ apiKey, settings: target.settings, stage, previous, signal: controller.signal })
+    if (generationController !== controller || session !== target) return
+    questionHistory.remember(target.settings, quiz.questions)
+    if (target.questions.length) {
+      target.history.push({ stage: target.stage, ...summarize(target.progress), concepts: target.questions.filter((_, i) => target.progress[i].attempts.length > 1).map((q) => q.concept) })
+    }
+    target.stage = stage
+    target.questions = quiz.questions
+    target.title = quiz.title
+    target.progress = createProgress(quiz.questions)
+    target.questionIndex = 0
+    target.threads = quiz.questions.map(() => [])
+    target.previous.push(...quiz.questions.map((q) => q.prompt))
+    $('#guide-input').value = ''
+    $('#guide-error').hidden = true
+    showingSummary = false
+    setConnection('success', target.mode === 'demo' ? '예시 퀴즈 체험 중' : '맞춤 문항 준비 완료')
   } catch (error) {
-    if (activeRequest !== controller) return
-    // 실패한 턴은 문맥에서 제외하고 입력을 복구해 재시도할 수 있게 합니다.
-    userRow.remove()
-    welcome.hidden = conversation.length > 0
-    input.value = text
-    setStatus('error', '아래 안내를 확인하고 다시 시도해 주세요.')
-    showError(error.message)
+    if (generationController !== controller || session !== target) return
+    generationError = error.message
+    setConnection('error', '문항 생성 재시도 필요')
   } finally {
-    if (activeRequest === controller) {
-      activeRequest = null
-      setLoading(false)
-      input.focus()
-      scrollToLatest()
+    if (generationController === controller) {
+      generationController = null
+      renderAll()
+      if (!generationError) { focusContent('#question-title'); learningEffects.enter($('#quiz-workspace')) }
     }
   }
-})
-input.addEventListener('input', updateComposer)
-input.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
-    event.preventDefault()
-    form.requestSubmit()
+}
+
+function renderTrack() {
+  $('#stage-track').replaceChildren()
+  STAGES.forEach((stage, i) => {
+    const active = session && (generationController ? pendingStage : session.stage) === i
+    const completed = session?.history.some((s) => s.stage === i) || (session?.stage === i && stageComplete(session.progress))
+    const skipped = session && i < session.settings.startStage
+    const item = node('li', [active && 'active', completed && 'complete', skipped && 'skipped'].filter(Boolean).join(' '))
+    if (active) item.setAttribute('aria-current', 'step')
+    item.append(node('span', 'stage-number', completed ? '✓' : String(i + 1)), node('strong', '', stage.name), node('small', '', skipped ? '선택한 시작 단계 이전' : stage.subtitle))
+    $('#stage-track').append(item)
+  })
+  $('#session-progress').hidden = !session
+  $('#session-chip').textContent = session ? session.mode === 'demo' ? '다항식 예시 체험' : `${session.settings.course} 맞춤 퀴즈` : '학습 준비'
+  $('#journey-title').textContent = session ? session.settings.unit || '직접 입력한 학습 범위' : '오늘의 수학 퀴즈'
+  $('#journey-description').textContent = session ? `성취기준 ${session.settings.standards.length}개, 단계마다 ${session.settings.count}문항. ${STAGES[session.settings.startStage].name}부터 최상위까지 풀어 보세요.` : '배울 단원과 성취기준을 고르고, 나의 속도로 풀어 보세요.'
+  if (!session) return
+  const done = session.history.reduce((sum, s) => sum + s.solved, 0) + summarize(session.progress).solved
+  const total = (STAGES.length - session.settings.startStage) * session.settings.count
+  $('#progress-label').textContent = '나의 학습 여정'
+  $('#progress-value').textContent = `${done} / ${total}문항 완료`
+  $('#total-progress').value = done / total * 100
+}
+function renderWelcome() {
+  const welcome = node('div', 'welcome-card')
+  welcome.append(node('h3', '', '모르면, 함께 생각해요.'), node('p', '', '오답에는 힌트가, 막히는 순간에는 생각 길잡이가 있어요. 한 단계의 문제를 모두 풀면 다음 단계로 이어져요.'))
+  return welcome
+}
+function renderAll() {
+  guideLayout.beforeRender()
+  $('#app').dataset.view = !session ? 'setup' : generationController ? 'loading' : showingSummary ? 'summary' : 'study'
+  renderTrack()
+  const workspace = $('#quiz-workspace')
+  workspace.replaceChildren()
+  workspace.setAttribute('aria-busy', String(Boolean(generationController)))
+  if (!session) workspace.append(renderWelcome())
+  else if (generationController) {
+    const loading = node('div', 'loading-card')
+    loading.append(node('div', 'loading-indicator'), node('h2', '', '생각이 자라는 문제를 만들고 있어요.'), node('p', '', '선택한 성취기준과 난이도에 맞춰 문항과 힌트를 준비해요.'), node('div', 'skeleton-line'), node('div', 'skeleton-line short'), action('생성 취소', 'text-button', () => { generationController?.abort() }))
+    workspace.append(loading)
+  } else {
+    if (generationError) workspace.append(node('p', 'error-notice', generationError))
+    if (!session.questions.length) {
+      const empty = node('div', 'loading-card')
+      empty.append(node('h2', '', '다시 한번 준비해 볼까요?'), action('같은 설정으로 다시 생성', 'primary-button', () => void loadStage(pendingStage)))
+      workspace.append(empty)
+    } else if (showingSummary) workspace.append(renderSummary())
+    else workspace.append(renderQuestion())
+  }
+  renderGuide()
+  guideLayout.place()
+}
+function changeQuestion(index) {
+  if (!session || index < 0 || index >= session.questions.length) return
+  abortGuide()
+  session.questionIndex = index
+  showingSummary = false
+  $('#guide-input').value = ''
+  $('#guide-error').hidden = true
+  renderAll()
+  focusContent('#question-title')
+}
+function renderQuestion() {
+  const q = currentQuestion(), p = currentProgress()
+  const card = node('article', 'question-card')
+  const top = node('div', 'question-top')
+  const badge = node('span', 'difficulty-badge', `${STAGES[session.stage].name} ${session.questionIndex + 1} / ${session.questions.length}`)
+  badge.setAttribute('role', 'status')
+  const nav = node('nav', 'question-nav')
+  nav.setAttribute('aria-label', '이번 단계 문제 선택')
+  session.progress.forEach((progress, index) => {
+    const b = action(progress.solved ? '✓' : String(index + 1), `question-dot ${index === session.questionIndex ? 'current' : ''} ${progress.solved ? 'solved' : ''}`, () => changeQuestion(index))
+    b.setAttribute('aria-label', `${index + 1}번 문제${progress.solved ? ', 완료' : ''}`)
+    if (index === session.questionIndex) b.setAttribute('aria-current', 'true')
+    nav.append(b)
+  })
+  top.append(badge, nav)
+  const standard = session.settings.standards.find((s) => s.id === q.standardId)
+  const standardLabel = node('p', 'question-standard', `${q.standardId.startsWith('custom-') ? '직접 입력한 성취기준' : q.standardId} / ${standard?.text ?? q.concept}`)
+  const title = rich('h2', 'question-title', q.prompt)
+  title.id = 'question-title'
+  card.setAttribute('aria-labelledby', title.id)
+  card.append(top, title, renderVisual(q.visual))
+  const options = node('div', 'answer-options')
+  options.setAttribute('role', 'group')
+  options.setAttribute('aria-label', '정답을 골라 주세요')
+  q.options.forEach((option, index) => {
+    const wrong = p.attempts.includes(index) && index !== q.correctIndex
+    const correct = p.solved && index === q.correctIndex
+    const button = action('', `answer-option ${wrong ? 'is-wrong' : ''} ${correct ? 'is-correct' : ''}`, () => chooseAnswer(index))
+    button.dataset.option = index
+    button.disabled = p.solved || wrong
+    button.append(node('span', 'option-number', String(index + 1)), rich('span', 'option-copy', option))
+    if (wrong || correct) button.append(node('span', 'option-state', correct ? '정답' : '다시 생각해요'))
+    options.append(button)
+  })
+  card.append(node('p', 'choice-instruction', '알맞은 보기를 눌러 보세요. 숫자 키 1~5로도 선택할 수 있어요.'), options)
+  if (p.solved || p.hintsUsed) {
+    const feedback = node('div', `answer-feedback ${p.solved ? 'feedback-success' : 'feedback-hint'}`)
+    const label = node('h3', '', p.solved ? '맞았어요! 스스로 한 걸음 나아갔네요.' : p.attempts.length ? '아직 정답은 아니에요. 함께 생각해 볼까요?' : '생각을 여는 작은 힌트')
+    label.id = 'feedback-title'
+    label.tabIndex = -1
+    const message = p.solved ? q.explanation : safeGuidance(q.hints[p.hintsUsed - 1], q, p.hintsUsed - 1)
+    feedback.append(label, rich('p', '', message))
+    if (!p.solved) feedback.append(node('small', '', `힌트 ${p.hintsUsed} / 3. 다른 보기를 골라 다시 도전해 보세요.`))
+    card.append(feedback)
+  }
+  const bottom = node('div', 'question-bottom')
+  const hint = action(`힌트 ${p.hintsUsed ? `${p.hintsUsed}/3` : '보기'}`, 'secondary-button', () => {
+    p.hintsUsed = Math.min(3, p.hintsUsed + 1)
+    renderAll()
+    focusContent('#feedback-title', 'nearest')
+  })
+  hint.disabled = p.solved || p.hintsUsed >= 3
+  const next = action(stageComplete(session.progress) ? '단계 결과 보기' : '다음 문제', 'primary-button', () => {
+    if (stageComplete(session.progress)) { showingSummary = true; abortGuide(); renderAll(); focusContent('.summary-card h2'); learningEffects.enter($('.summary-card')); learningEffects.celebrate($('.summary-card h2'), { stage: true }) }
+    else {
+      const remaining = session.progress.findIndex((progress, index) => index > session.questionIndex && !progress.solved)
+      changeQuestion(remaining >= 0 ? remaining : session.progress.findIndex((progress) => !progress.solved))
+    }
+  })
+  next.disabled = !p.solved
+  bottom.append(hint, next)
+  const guideDisclosure = node('details', 'mobile-guide')
+  guideDisclosure.id = 'mobile-guide'
+  const guideSummary = node('summary', '', '생각 길잡이에게 질문하기')
+  const guideSlot = node('div')
+  guideSlot.id = 'mobile-guide-slot'
+  guideDisclosure.append(guideSummary, guideSlot)
+  card.append(bottom, guideDisclosure, standardLabel)
+  return card
+}
+function chooseAnswer(index) {
+  if (!session || generationController || showingSummary) return
+  const before = currentProgress()
+  const after = answerQuestion(currentQuestion(), before, index)
+  if (after === before) return
+  abortGuide()
+  session.progress[session.questionIndex] = after
+  renderAll()
+  focusContent('#feedback-title', 'nearest')
+  learningEffects.enter($('.answer-feedback'))
+  if (after.solved) learningEffects.celebrate($('#feedback-title'))
+}
+function renderSummary() {
+  const result = summarize(session.progress)
+  const final = session.stage === STAGES.length - 1
+  const card = node('section', 'summary-card')
+  card.append(node('h2', '', final ? '최상위까지, 끝까지 해냈어요!' : `${STAGES[session.stage].name} 단계 완료!`), node('p', 'summary-subtitle', final ? '틀린 문제도 다시 생각하며 여기까지 온 과정이 실력이에요.' : '이번에 배운 개념을 가지고, 다음 도전으로 가 볼까요?'))
+  const stats = node('div', 'summary-stats')
+  ;[[`${result.solved}/${session.questions.length}`, '문제 완료'], [String(result.firstTry), '첫 시도 정답'], [String(result.retried), '다시 생각해 해결']].forEach(([value, label]) => {
+    const stat = node('div')
+    stat.append(node('strong', '', value), node('span', '', label))
+    stats.append(stat)
+  })
+  card.append(node('h3', 'stats-heading', `${STAGES[session.stage].name} 단계 결과`), stats)
+  const review = node('div', 'review-box')
+  review.append(node('h3', '', '이번 단계에서 익힌 개념'))
+  const concepts = node('div', 'concept-tags')
+  ;[...new Set(session.questions.map((q) => q.concept))].forEach((concept) => concepts.append(node('span', '', concept)))
+  review.append(concepts)
+  card.append(review)
+  if (final) {
+    const all = [...session.history, { ...result }]
+    card.append(
+      node('p', 'completion-total', `총 ${all.reduce((n, s) => n + s.solved, 0)}문항 완료, 첫 시도 정답 ${all.reduce((n, s) => n + s.firstTry, 0)}문항`),
+      node('p', 'next-stage-note', '같은 단원에 다시 도전하면 이전과 다른 문제를 만나요.'),
+      action('같은 단원 다시 풀기', 'primary-button', () => begin(structuredClone(session.settings), session.mode)),
+      action('다른 단원 선택하기', 'text-button', resetSession),
+    )
+  } else {
+    card.append(node('p', 'next-stage-note', `다음 학습: ${STAGES[session.stage + 1].name}, ${STAGES[session.stage + 1].subtitle}`), action(generationError ? '다음 단계 다시 생성' : `${STAGES[session.stage + 1].name} 단계 시작`, 'primary-button', () => void loadStage(session.stage + 1)))
+  }
+  card.append(action('이번 단계 문제 다시 보기', 'text-button', () => changeQuestion(0)))
+  return card
+}
+
+function renderGuide() {
+  const available = Boolean(currentQuestion()) && !generationController && !showingSummary
+  if (!available) $('#guide-error').hidden = true
+  $('#guide-form').hidden = !available
+  $('#guide-prompts').hidden = !available
+  $('.guide-note').hidden = !available
+  $('#guide-context').textContent = available ? `지금 함께 보는 개념: ${currentQuestion().concept}` : showingSummary ? '잘 해냈어요. 다음 도전도 함께해요!' : '퀴즈를 시작하면 함께할게요'
+  $('#guide-log').replaceChildren()
+  const thread = available ? session.threads[session.questionIndex] : []
+  if (!thread.length) {
+    const message = node('div', 'guide-bubble')
+    if (available) {
+      message.append(node('strong', '', '함께 생각해 볼까요?'), node('p', '', '어디서부터 풀어야 할지 막막한가요? 헷갈리는 부분을 말해 주세요. 필요한 개념부터 하나씩 살펴볼게요.'))
+    } else {
+      const messageText = showingSummary
+        ? session.stage === STAGES.length - 1 ? '선택한 학습 과정을 모두 마쳤어요. 같은 단원의 새 문제나 다른 단원으로 다시 도전할 수 있어요.' : '이번 단계를 마쳤어요. 다음 단계를 시작하면 새 문제의 개념도 함께 살펴볼게요.'
+        : generationController ? '새 문제를 준비하고 있어요. 준비가 끝나면 헷갈리는 개념부터 함께 살펴봐요.' : '문제가 준비되면 궁금한 부분을 질문할 수 있어요.'
+      message.append(node('p', '', messageText))
+    }
+    $('#guide-log').append(message)
+  } else thread.forEach((message) => $('#guide-log').append(rich('div', `guide-bubble ${message.role === 'user' ? 'guide-user' : ''}`, message.content)))
+  if (guideController) $('#guide-log').append(node('div', 'guide-thinking', '작은 실마리를 찾고 있어요…'))
+  $('#guide-prompts').replaceChildren()
+  if (available && !thread.length) ['어떤 개념이 필요한가요?', '어디서부터 시작할까요?'].forEach((text) => {
+    const b = action(text, 'guide-prompt', () => { $('#guide-input').value = text; $('#guide-input').focus(); updateGuideComposer() })
+    b.disabled = Boolean(guideController)
+    $('#guide-prompts').append(b)
+  })
+  $('#guide-input').disabled = !available || Boolean(guideController)
+  updateGuideComposer()
+}
+function updateGuideComposer() {
+  $('#guide-send').disabled = $('#guide-input').disabled || !$('#guide-input').value.trim()
+}
+async function submitGuide(event) {
+  event.preventDefault()
+  const text = $('#guide-input').value.trim()
+  if (!text || !currentQuestion() || guideController || generationController || showingSummary) return
+  const target = session, questionIndex = session.questionIndex, q = currentQuestion()
+  const thread = target.threads[questionIndex]
+  const history = [...thread]
+  const controller = new AbortController()
+  guideController = controller
+  pendingGuideThread = thread
+  thread.push({ role: 'user', content: text })
+  $('#guide-input').value = ''
+  $('#guide-error').hidden = true
+  $('#guide-log').setAttribute('aria-busy', 'true')
+  renderGuide()
+  try {
+    const answer = target.mode === 'demo'
+      ? safeGuidance(q.hints[Math.min(2, Math.floor(history.length / 2))], q)
+      : await askGuide({ apiKey, settings: target.settings, question: q, history, text, hintIndex: currentProgress().hintsUsed, signal: controller.signal })
+    if (guideController !== controller || session !== target || session.questionIndex !== questionIndex) return
+    thread.push({ role: 'assistant', content: answer })
+  } catch (error) {
+    if (guideController !== controller) return
+    thread.pop()
+    $('#guide-input').value = text
+    $('#guide-error').textContent = error.message
+    $('#guide-error').hidden = false
+  } finally {
+    if (guideController === controller) {
+      guideController = null
+      pendingGuideThread = null
+      $('#guide-log').setAttribute('aria-busy', 'false')
+      renderGuide()
+      $('#guide-input').focus()
+      $('#guide-log').scrollTop = $('#guide-log').scrollHeight
+    }
+  }
+}
+
+$('#course').addEventListener('change', populateUnits)
+$('#unit').addEventListener('change', populateStandards)
+$('#settings-form').addEventListener('submit', (event) => {
+  event.preventDefault()
+  if (session) return
+  try {
+    const settings = readSettings()
+    if (!apiKey) throw new Error('API 키가 아직 없어요. 사용 방법의 로컬 API 설정을 확인하거나 예시 퀴즈를 체험해 보세요.')
+    begin(settings, 'ai')
+  } catch (error) {
+    $('#setup-error').textContent = error.message
+    $('#setup-error').hidden = false
   }
 })
-suggestions.forEach((button) => {
-  button.addEventListener('click', () => {
-    if (activeRequest) return
-    input.value = button.dataset.prompt
-    updateComposer()
-    input.focus()
-  })
+$('#reset-button').addEventListener('click', resetSession)
+$('#demo-button').addEventListener('click', () => {
+  $('#course').value = '공통수학1'
+  populateUnits()
+  $('#range').value = DEMO_SETTINGS.range
+  $('#difficulty').value = '0'
+  $('#question-count').value = '3'
+  $('#custom-standards').value = ''
+  begin(structuredClone(DEMO_SETTINGS), 'demo')
 })
-document.querySelector('#reset-chat').addEventListener('click', () => {
-  activeRequest?.abort()
-  activeRequest = null
-  conversation = []
-  messages.replaceChildren()
-  input.value = ''
-  errorNotice.hidden = true
-  welcome.hidden = false
-  document.querySelector('#composer-tip').textContent = '새로운 대화가 시작됐어요. 어떤 이야기를 해 볼까요?'
-  setLoading(false)
-  setInitialStatus()
-  input.focus()
-  scrollArea.scrollTop = 0
+$('#guide-input').addEventListener('input', updateGuideComposer)
+$('#guide-input').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); $('#guide-form').requestSubmit() }
 })
-document.querySelector('#open-guide').addEventListener('click', () => dialog.showModal())
-document.querySelector('#close-guide').addEventListener('click', () => dialog.close())
-dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close() })
-setInitialStatus()
-updateComposer()
+$('#guide-form').addEventListener('submit', submitGuide)
+document.addEventListener('keydown', (event) => {
+  if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing || event.repeat || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(event.target.tagName) || event.target.isContentEditable || $('#help-dialog').open) return
+  if (/^[1-5]$/.test(event.key)) { event.preventDefault(); chooseAnswer(Number(event.key) - 1) }
+})
+$('#help-button').addEventListener('click', () => $('#help-dialog').showModal())
+$('#local-help').addEventListener('click', () => $('#help-dialog').showModal())
+$('#close-help').addEventListener('click', () => $('#help-dialog').close())
+$('#help-dialog').addEventListener('click', (event) => { if (event.target === $('#help-dialog')) $('#help-dialog').close() })
+populateUnits()
+setConnection(apiKey ? 'ready' : 'missing', apiKey ? 'API 키 설정됨' : '예시 퀴즈 체험 가능')
+renderAll()

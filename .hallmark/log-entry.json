@@ -1,0 +1,56 @@
+{
+  "date": "2026-11-09",
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "theme": "brand",
+  "shape": "app screen",
+  "axes": "light paper / Korean sans / retained violet and lime",
+  "hero": "not applicable, working app",
+  "nav": "compact learning shell",
+  "footer": "course note",
+  "imagery": "real mathematical diagrams, no photo slots",
+  "photos": [],
+  "entry": "src/main.js",
+  "fingerprint": "setup-first / question-and-guide / inline-mobile-guide / stage-results",
+  "sections": [
+    "learning setup",
+    "five-stage course",
+    "math question and visual",
+    "thinking guide",
+    "stage result"
+  ],
+  "signature": "The current math problem and a guide that asks the next thinking step",
+  "waived": [],
+  "prompt": "Full redesign of the vocational high school first-year Korean math quiz learning screen while retaining all quiz and guide behavior",
+  "material": "working app, curriculum selections, mathematical visuals, measured session progress",
+  "review": {
+    "method": "finish-review subagent",
+    "findings": 5,
+    "resolved": 5
+  },
+  "checks": {
+    "floor": 0,
+    "reflex": 0,
+    "warn": 0,
+    "screenshots": 25,
+    "unitTests": 31,
+    "build": "pass",
+    "links": "2/2",
+    "fields": "11/11"
+  },
+  "files": {
+    "edit": [
+      "src/main.js",
+      "src/style.css",
+      "src/visuals.js",
+      "index.html"
+    ],
+    "create": [
+      "src/tokens.css",
+      "src/base.css",
+      "src/guide-layout.js"
+    ],
+    "delete": []
+  }
+}
