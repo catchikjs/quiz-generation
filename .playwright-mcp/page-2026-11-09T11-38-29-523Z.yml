@@ -1,0 +1,91 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - link "팝챗 처음 화면" [ref=e4] [cursor=pointer]:
+      - /url: ./
+      - text: pop
+      - generic [ref=e5]: ✳
+      - generic [ref=e6]: chat
+      - generic [ref=e7]: .
+    - generic [ref=e8]: 작은 질문에서 시작하는, 커다란 아이디어.
+    - button "시작 가이드" [ref=e9] [cursor=pointer]:
+      - generic [aria-hidden] [ref=e10]: "?"
+      - text: 시작 가이드
+  - main [ref=e11]:
+    - complementary "팝챗 소개" [ref=e12]:
+      - generic [ref=e13]: YOUR EVERYDAY AI PLAYGROUND
+      - heading "궁금한 건, 일단 톡." [level=1] [ref=e15]:
+        - text: 궁금한 건,일단
+        - generic [ref=e16]: 톡.
+      - paragraph [ref=e17]: 공부부터 엉뚱한 상상까지.생각을 톡 던지면, 아이디어가 팝!
+      - generic [aria-hidden] [ref=e18]:
+        - generic [ref=e19]: SAY HELLO!
+        - generic [ref=e30]: 100% YOUR CURIOSITY
+      - generic [ref=e31]:
+        - paragraph [ref=e32]: 대화는 이렇게
+        - paragraph [ref=e33]:
+          - generic [ref=e34]: "01"
+          - text: 떠오른 질문을 자유롭게 보내기
+        - paragraph [ref=e35]:
+          - generic [ref=e36]: "02"
+          - text: 답변에 이어서 더 깊이 물어보기
+        - paragraph [ref=e37]:
+          - generic [ref=e38]: "03"
+          - text: 새 주제는 대화 초기화로 시작!
+      - generic [ref=e39]:
+        - generic [aria-hidden] [ref=e40]: ↗
+        - generic [ref=e41]:
+          - strong [ref=e42]: 지금은 로컬 실습 중
+          - paragraph [ref=e43]: 브라우저에서 OpenAI API로 직접 연결해요.
+    - region "AI와 대화" [ref=e44]:
+      - generic [ref=e45]:
+        - generic [ref=e50]:
+          - heading "나의 아이디어 메이트" [level=2] [ref=e51]
+          - paragraph [ref=e52]: POWERED BY OPENAI · gpt-6-luna
+        - button "대화 초기화" [ref=e53] [cursor=pointer]
+      - generic [ref=e57]:
+        - status [ref=e58]:
+          - generic [ref=e60]: 키 미설정
+        - generic [ref=e61]: .env.local에 키를 입력하고 서버를 재시작해 주세요.
+      - generic [ref=e63]:
+        - generic [aria-hidden] [ref=e64]:
+          - generic [ref=e65]: ✳
+          - generic [ref=e66]: ✦
+          - generic [ref=e67]: hi!
+        - text: BIG IDEAS START WITH A LITTLE CHAT
+        - heading "안녕! 어떤 생각을 하고 있어?" [level=2] [ref=e68]
+        - paragraph [ref=e69]: 정답이 필요한 순간도, 그냥 수다 떨고 싶은 순간도.뭐든 좋아. 우리 이야기해 보자!
+        - generic "질문 아이디어" [ref=e70]:
+          - button "공부도 가볍게 어려운 개념, 쉽게 풀어줘" [ref=e71] [cursor=pointer]:
+            - generic [aria-hidden] [ref=e72]: ✎
+            - strong [ref=e73]: 공부도 가볍게
+            - generic [ref=e74]: 어려운 개념, 쉽게 풀어줘
+            - generic [aria-hidden] [ref=e75]: ↗
+          - button "아이디어가 필요해 새로운 영감을 톡!" [ref=e76] [cursor=pointer]:
+            - generic [aria-hidden] [ref=e77]: ✧
+            - strong [ref=e78]: 아이디어가 필요해
+            - generic [ref=e79]: 새로운 영감을 톡!
+            - generic [aria-hidden] [ref=e80]: ↗
+          - button "그냥 재밌는 얘기 엉뚱한 상상도 환영해" [ref=e81] [cursor=pointer]:
+            - generic [aria-hidden] [ref=e82]: ☺
+            - strong [ref=e83]: 그냥 재밌는 얘기
+            - generic [ref=e84]: 엉뚱한 상상도 환영해
+            - generic [aria-hidden] [ref=e85]: ↗
+      - generic [ref=e86]:
+        - generic [ref=e87]:
+          - generic [aria-hidden] [ref=e88]: ✧
+          - generic [ref=e89]: 작은 질문도 좋아요. 편하게 시작해 보세요.
+        - generic [ref=e90]:
+          - generic [ref=e91]: 메시지 입력
+          - generic [ref=e92]:
+            - textbox "메시지 입력" [ref=e93]:
+              - /placeholder: 생각나는 건 뭐든 물어봐…
+            - button "보내기" [disabled] [ref=e94]
+          - generic [ref=e98]:
+            - generic [ref=e99]: Enter 전송 · Shift + Enter 줄바꿈
+            - generic [ref=e100]: 0 / 6,000
+        - paragraph [ref=e101]: AI의 답변은 틀릴 수 있어요. 중요한 내용은 한 번 더 확인해 주세요.
+  - contentinfo [ref=e102]:
+    - generic [ref=e103]: STAY CURIOUS. KEEP POPPING.
+    - paragraph [ref=e106]:
+      - text: 교육용 로컬 실습 · 브라우저 환경 변수는 API 키를 숨기지 못해요.
+      - strong [ref=e107]: 실제 키가 포함된 빌드 결과물을 공개 배포하지 마세요.
