@@ -14,7 +14,7 @@ export function renderVisual(visual) {
   figure.className = `question-visual visual-${visual.type}`
   const heading = document.createElement('figcaption')
   heading.className = 'visual-heading'
-  heading.textContent = visual.title || '문제 살펴보기'
+  renderMessage(heading, visual.title || '문제 살펴보기')
   figure.append(heading)
   if (visual.type === 'mapping') {
     const diagrams = document.createElement('div')
@@ -51,6 +51,15 @@ function mathLabel(svg, text, x, y, name = false) {
   label.className = `mapping-label${name ? ' mapping-set-name' : ''}`
   const delimited = /\\[([]|\$/.test(text)
   renderMessage(label, delimited ? text : `\\(${text}\\)`)
+  box.append(label)
+  svg.append(box)
+}
+
+function chartLabel(svg, text, x, y, width, align = 'start') {
+  const box = svgNode('foreignObject', { x, y, width, height: 30 })
+  const label = document.createElement('div')
+  label.className = `chart-label chart-label-${align}`
+  renderMessage(label, text)
   box.append(label)
   svg.append(box)
 }
@@ -106,7 +115,7 @@ function drawNumberLine(svg, items) {
   }
   items.forEach((p, i) => {
     svg.append(svgNode('circle', { cx: scale(p.x), cy: 125, r: 7, class: 'chart-point' }))
-    svg.append(svgNode('text', { x: scale(p.x), y: 85 - (i % 2) * 25, 'text-anchor': 'middle' }, `${p.label} (${p.x})`))
+    chartLabel(svg, `${p.label} (${p.x})`, scale(p.x) - 70, 65 - (i % 2) * 25, 140, 'center')
   })
 }
 
@@ -118,7 +127,7 @@ function drawBars(svg, items) {
   svg.append(svgNode('line', { x1: scale(0), y1: 20, x2: scale(0), y2: 215, class: 'chart-axis' }))
   items.forEach((p, i) => {
     const y = 25 + i * step
-    svg.append(svgNode('text', { x: 135, y: y + step / 2 + 5, 'text-anchor': 'end' }, p.label))
+    chartLabel(svg, p.label, 5, y + step / 2 - 15, 130, 'end')
     svg.append(svgNode('rect', { x: Math.min(scale(0), scale(p.x)), y, width: Math.max(2, Math.abs(scale(p.x) - scale(0))), height: Math.max(10, step - 10), rx: 5, class: 'chart-bar' }))
     svg.append(svgNode('text', { x: scale(p.x) + 10, y: y + step / 2 + 5 }, p.x))
   })
@@ -141,6 +150,6 @@ function drawCoordinates(svg, items) {
   svg.append(svgNode('polyline', { points: items.map((p) => `${x(p.x)},${y(p.y)}`).join(' '), fill: 'none', class: 'chart-line' }))
   items.forEach((p) => {
     svg.append(svgNode('circle', { cx: x(p.x), cy: y(p.y), r: 5, class: 'chart-point' }))
-    svg.append(svgNode('text', { x: x(p.x) + 8, y: y(p.y) - 10 }, p.label))
+    chartLabel(svg, p.label, x(p.x) + 8, y(p.y) - 32, 110)
   })
 }

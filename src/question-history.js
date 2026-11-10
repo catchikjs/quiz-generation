@@ -1,4 +1,5 @@
 import { normalizeMath } from './quiz.js'
+import { normalizeMathDelimiters } from './math-text.js'
 
 export const QUESTION_HISTORY_KEY = 'quizpop.question-history.v1'
 export const MAX_UNIT_QUESTIONS = 500
@@ -12,6 +13,7 @@ export function unitHistoryKey(settings) {
 }
 
 export function questionSignatures(prompt) {
+  prompt = normalizeMathDelimiters(prompt)
   const normalize = (text) => normalizeMath(text.normalize('NFKC')).replace(/[−–]/g, '-').replace(/[.,!?，。？！]/g, '')
   const signatures = [`text:${normalize(prompt)}`]
   const formulas = [...prompt.matchAll(/\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|\$([^$\n]+)\$/g)]

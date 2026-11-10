@@ -1,3 +1,5 @@
+import { normalizeMathDelimiters } from './math-text.js'
+
 export function validateSettings(settings) {
   if (!settings.unit?.trim() && !settings.range?.trim()) throw new Error('단원명이나 학습 범위를 입력해 주세요.')
   if (!Array.isArray(settings.standards) || !settings.standards.length || settings.standards.some((s) => !s.id || !s.text?.trim())) {
@@ -64,7 +66,7 @@ export function quizSchema(count) {
                     },
                   },
                 },
-              }],
+              }, { type: 'null' }],
             },
           },
         },
@@ -87,6 +89,7 @@ export function validateQuiz(data, settings) {
     if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex > 4) invalid()
     if (!Array.isArray(q.hints) || q.hints.length !== 3 || q.hints.some((h) => typeof h !== 'string' || !h.trim())) invalid()
     const v = q.visual
+    if (v === null) continue
     if (!v || !['concept', 'bars', 'number_line', 'coordinate', 'mapping'].includes(v.type) || typeof v.title !== 'string' || typeof v.caption !== 'string') invalid()
     if (v.type === 'mapping') {
       if (!Array.isArray(v.diagrams) || !v.diagrams.length || v.diagrams.length > 5) invalid()
@@ -142,7 +145,7 @@ export function summarize(progress) {
 }
 
 export function normalizeMath(text) {
-  return text.replace(/\\[()[\]]|\$|\s|[{}]/g, '').replace(/\\(?:left|right)/g, '').toLowerCase()
+  return normalizeMathDelimiters(text).replace(/\\[()[\]]|\$|\s|[{}]/g, '').replace(/\\(?:left|right)/g, '').toLowerCase()
 }
 
 // 정답과 해설은 도우미 요청에 넣지 않습니다. 직접적인 정답 노출도 표시 전에 검사합니다.

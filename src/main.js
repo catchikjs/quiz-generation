@@ -324,7 +324,8 @@ function renderQuestion() {
   const title = rich('h2', 'question-title', q.prompt)
   title.id = 'question-title'
   card.setAttribute('aria-labelledby', title.id)
-  card.append(top, title, renderVisual(q.visual))
+  card.append(top, title)
+  if (q.visual) card.append(renderVisual(q.visual))
   const options = node('div', 'answer-options')
   options.setAttribute('role', 'group')
   options.setAttribute('aria-label', '정답을 골라 주세요')

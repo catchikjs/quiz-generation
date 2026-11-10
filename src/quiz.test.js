@@ -13,9 +13,13 @@ test('settings require a unit or range, standards, and a supported stage and cou
   }
 })
 
-test('all five demo stages have valid unique choices, standards and visuals', () => {
+test('all five demo stages have valid unique choices and standards without unnecessary visuals', () => {
   assert.deepEqual(STAGES.map((s) => s.name), ['기초', '기본', '응용', '심화', '최상위'])
-  STAGES.forEach((_, stage) => assert.equal(validateQuiz(demoQuiz(stage), DEMO_SETTINGS).questions.length, 3))
+  STAGES.forEach((_, stage) => {
+    const quiz = validateQuiz(demoQuiz(stage), DEMO_SETTINGS)
+    assert.equal(quiz.questions.length, 3)
+    assert.ok(quiz.questions.every((q) => q.visual === null))
+  })
 })
 
 test('wrong answers reveal a hint without solving or unlocking the stage', () => {
@@ -46,6 +50,7 @@ test('malformed, duplicate, mismatched and unsafe numerical visual data is rejec
     (q) => { q.questions.pop() },
     (q) => { q.questions[0].correctIndex = 7 },
     (q) => { q.questions[0].options[1] = q.questions[0].options[0] },
+    (q) => { q.questions[0].options[1] = q.questions[0].options[0].replaceAll('\\', '\\\\') },
     (q) => { q.questions[0].standardId = 'unselected' },
     (q) => { q.questions[1].prompt = q.questions[0].prompt },
     (q) => { q.questions[0].visual.items[0].x = Infinity },
@@ -53,7 +58,23 @@ test('malformed, duplicate, mismatched and unsafe numerical visual data is rejec
     (q) => { q.questions[0].hints = [] },
   ]) {
     const data = demoQuiz(0)
+    data.questions[0].visual = { type: 'bars', title: '생산량', caption: '각 수량을 비교하세요.', items: [{ label: '가', x: 10, y: 0 }] }
     mutate(data)
+    assert.throws(() => validateQuiz(data, DEMO_SETTINGS))
+  }
+})
+
+test('visuals can be null or valid diagrams, but missing and malformed visuals are rejected', () => {
+  for (const visual of [null, ...['concept', 'bars', 'number_line', 'coordinate'].map((type) => ({
+    type, title: '주어진 조건', caption: '자료를 읽어 보세요.', items: [{ label: '$x$', x: 1, y: 2 }],
+  }))]) {
+    const data = demoQuiz(0)
+    data.questions[0].visual = visual
+    assert.equal(validateQuiz(data, DEMO_SETTINGS), data)
+  }
+  for (const visual of [undefined, false, {}, { type: 'none' }]) {
+    const data = demoQuiz(0)
+    data.questions[0].visual = visual
     assert.throws(() => validateQuiz(data, DEMO_SETTINGS))
   }
 })
@@ -86,9 +107,14 @@ test('generation requests the exact count and strict Responses JSON schema', asy
     assert.deepEqual(body.text.format.schema, quizSchema(3))
     assert.equal(JSON.parse(body.input[0].content).difficulty, '심화')
     assert.equal(body.max_output_tokens, 10000)
+    assert.match(body.instructions, /visual은 기본적으로 null/)
+    assert.match(body.instructions, /단순 계산[\s\S]*visual을 null/)
+    assert.match(body.instructions, /수식 구분자 앞에는 역슬래시를 붙이지 않는다/)
     return response(JSON.stringify(demoQuiz(3)))
   })
-  assert.equal((await generateQuiz({ apiKey: 'fake-test-key', settings: DEMO_SETTINGS, stage: 3 })).questions.length, 3)
+  const quiz = await generateQuiz({ apiKey: 'fake-test-key', settings: DEMO_SETTINGS, stage: 3 })
+  assert.equal(quiz.questions.length, 3)
+  assert.ok(quiz.questions.every((q) => q.visual === null))
 })
 
 test('generation rejects non-JSON or invalid model output rather than presenting it', async (t) => {

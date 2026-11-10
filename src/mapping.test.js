@@ -67,8 +67,8 @@ test('generation accepts the mapping schema and keeps diagram labels and edges w
   const original = quiz.questions[0]
   const schema = quizSchema(3)
   const branches = schema.properties.questions.items.properties.visual.anyOf
-  assert.equal(branches.length, 2)
-  assert.deepEqual(branches[1].properties.type.enum, ['mapping'])
+  assert.ok(branches.some((branch) => branch.type === 'null'))
+  assert.deepEqual(branches.find((branch) => branch.properties?.type.enum.includes('mapping')).properties.type.enum, ['mapping'])
   t.mock.method(globalThis, 'fetch', async (_url, options) => {
     const body = JSON.parse(options.body)
     assert.deepEqual(body.text.format.schema, schema)

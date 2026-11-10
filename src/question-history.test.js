@@ -59,6 +59,8 @@ test('duplicate checks catch reworded or reordered math and duplicates in the ne
   const old = String.raw`\(2x+3\)과 \(x+4\)의 합은?`
   const repeated = '$x+4$ 와 $2x+3$ 을 더한 식을 골라 보세요.'
   assert.deepEqual(repeatedPrompts([{ prompt: repeated }], [old]), [repeated])
+  const overescaped = String.raw`\\(x+4\\)와 \\\\(2x+3\\\\)을 더해 보세요.`
+  assert.deepEqual(repeatedPrompts([{ prompt: overescaped }], [old]), [overescaped])
   assert.equal(repeatedPrompts([{ prompt: String.raw`\(3x+3\)과 \(x+4\)의 합은?` }], [old]).length, 0)
   assert.equal(repeatedPrompts([{ prompt: old }, { prompt: repeated }]).length, 1)
   assert.equal(repeatedPrompts([{ prompt: '같은 문제!' }], ['같은  문제?']).length, 1)
